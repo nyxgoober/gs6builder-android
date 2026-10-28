@@ -52,7 +52,7 @@ through [Chaquopy](https://chaquo.com/chaquopy/).
    builds every wheel and only if all of them succeed, builds a debug APK. GitHub provides artifacts as zips:
    - `gs6-debug-apk`: the debug APK
    - `wheels-all`: all `.whl` files; unzip into `./wheels/` to build locally in Android Studio
-3. Put `libffmpeg.so` in `app/src/main/jniLibs/arm64-v8a/` (grab from repository) before building the APK locally.
+3. Put `libffmpeg_bin.so` in `app/src/main/jniLibs/arm64-v8a/` (grab from repository) before building the APK locally.
 4. To build locally, open the folder in Android Studio (it creates the Gradle wrapper), sync, and run on a
    device. Chaquopy needs a host `python3` 3.13 on `PATH` to match the app's Python version.
 

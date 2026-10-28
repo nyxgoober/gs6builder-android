@@ -100,9 +100,11 @@ class Backend(private val ctx: Context) {
             }
             stamp.writeText("ok")
         }
-        val ffmpeg = File(ctx.applicationInfo.nativeLibraryDir, "libffmpeg.so")
-        check(ffmpeg.exists()) { "libffmpeg.so missing from the APK (see README)" }
-        call("init", ffmpeg.absolutePath, bases.absolutePath)
+        val layout = com.utsk.gs6builder.ffmpeg.FfmpegBinaries.ensureInstalled(ctx)
+        check(File(layout.ffmpegPath).exists()) { "libffmpeg_bin.so missing from the APK (see README)" }
+        // Must be set before Python starts so ffmpeg subprocesses inherit it.
+        android.system.Os.setenv("LD_LIBRARY_PATH", layout.libDir, true)
+        call("init", layout.ffmpegPath, bases.absolutePath)
     }
 
     private fun displayName(uri: Uri): String =
