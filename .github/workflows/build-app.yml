@@ -145,7 +145,7 @@ jobs:
         run: python patch_unitypy.py
 
       - name: Pull upstream builder code + bases
-        run: bash setup.sh
+        run: bash sync.sh
 
       - name: Pin Chaquopy Python to 3.13
         run: |
