@@ -87,7 +87,7 @@ class Backend(private val ctx: Context) {
     val projectDir = File(ctx.filesDir, "project").apply { mkdirs() }
     val outDir = File(ctx.cacheDir, "out").apply { mkdirs() }
 
-    fun call(name: String, vararg args: Any?): String = py.callAttr(name, *args).toString()
+    fun call(name: String, vararg args: Any?): String = py.callAttr(name, *args)?.toString() ?: ""
 
     /** Extract bases from assets once, then tell Python where ffmpeg and the bases live. */
     fun init() {
