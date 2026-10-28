@@ -1,0 +1,178 @@
+name: Build App
+
+on:
+  workflow_dispatch:
+
+jobs:
+  sync:
+    name: Sync with upstream
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+      - name: Run sync script
+        run: |
+          chmod +x sync.sh
+          ./sync.sh
+
+  wheels:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        pkg: 
+          - cricodecs
+          - rg-converters
+          - "UnityPy==1.24.2"
+          - texture2ddecoder
+          - etcpak
+          - astc-encoder-py
+          - lz4
+          - brotli
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Set up Python 3.13
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.13"
+
+      - name: Fetch sdist from PyPI
+        run: |
+          mkdir sdist
+          python - <<'PY'
+          import json, urllib.request, os
+          name, _, ver = os.environ["PKG"].partition("==")
+          url = f"https://pypi.org/pypi/{name}/{ver}/json" if ver else f"https://pypi.org/pypi/{name}/json"
+          d = json.load(urllib.request.urlopen(url))
+          u = next(u for u in d["urls"] if u["packagetype"] == "sdist")
+          urllib.request.urlretrieve(u["url"], "sdist/" + u["filename"])
+          print("sdist:", u["filename"])
+          PY
+        env:
+          PKG: "${{ matrix.pkg }}"
+
+      - name: Patch sdist for Android (cricodecs, rg-converters)
+        if: matrix.pkg == 'cricodecs' || matrix.pkg == 'rg-converters'
+        run: |
+          python - <<'PY'
+          import glob, os, re, shutil, tarfile
+          sd = glob.glob("sdist/*.tar.gz")[0]
+          with tarfile.open(sd) as t: t.extractall("sdist")
+          os.remove(sd)
+          root = next(d for d in glob.glob("sdist/*/") if os.path.isfile(d + "CMakeLists.txt"))
+          cm = root + "CMakeLists.txt"
+          txt = open(cm).read()
+          if os.environ["PKG"] == "cricodecs":
+              # NDK 27 libc++ (LLVM 18) lacks <flat_map>/<flat_set>; shadow them with std::map/set.
+              open(root + "CriCodecs/include/flat_map", "w").write(
+                  "#pragma once\n#include <map>\nnamespace std { template <class K, class V, class C = less<K>> using flat_map = map<K, V, C>; }\n")
+              open(root + "CriCodecs/include/flat_set", "w").write(
+                  "#pragma once\n#include <set>\nnamespace std { template <class K, class C = less<K>> using flat_set = set<K, C>; }\n")
+              # std::stop_token / jthread are 'experimental' in libc++ 18 (header-only).
+              i = txt.index("project("); j = txt.index("\n", i) + 1
+              txt = txt[:j] + "add_compile_definitions(_LIBCPP_ENABLE_EXPERIMENTAL)\n" + txt[j:]
+              # clang 18 mishandles `if consteval` inside templates. Use is_constant_evaluated instead.
+              n = root + "CriCodecs/src/utilities/numeric.hpp"
+              t = open(n).read().replace("if consteval {", "if (std::is_constant_evaluated()) {")
+              open(n, "w").write(re.sub(r"\bconsteval\b", "constexpr", t))
+              # nanobind modules don't link libpython; Android needs it (--no-undefined).
+              with open(root + "PyCriCodecs/CMakeLists.txt", "a") as f:
+                  f.write("\nif(ANDROID)\n  target_link_options(cricodecs PRIVATE -lpython${Python_VERSION_MAJOR}.${Python_VERSION_MINOR})\nendif()\n")
+          else:
+              # pybind11 + Development.Module doesn't link libpython; Android needs it.
+              txt += "\nif(ANDROID)\n  target_link_options(_rg_converters PRIVATE -lpython${Python_VERSION_MAJOR}.${Python_VERSION_MINOR})\nendif()\n"
+          open(cm, "w").write(txt)
+          name = os.path.basename(root.rstrip("/"))
+          with tarfile.open(f"sdist/{name}.tar.gz", "w:gz") as t: t.add(root, arcname=name)
+          shutil.rmtree(root)
+          print(os.listdir("sdist"))
+          PY
+        env:
+          PKG: "${{ matrix.pkg }}"
+
+      - name: cibuildwheel (Android, CPython 3.13)
+        run: |
+          pip install "cibuildwheel>=3.1"
+          cibuildwheel --platform android --archs arm64_v8a --output-dir wheelhouse sdist/*.tar.gz
+        env:
+          CIBW_BUILD: "cp313-android_*"
+          CIBW_AUDIT_COMMAND: ""
+          CIBW_ENVIRONMENT: ${{ matrix.pkg == 'cricodecs' && 'ANDROID_API_LEVEL=28' || '' }}
+
+      - name: Upload wheel artifacts
+        uses: actions/upload-artifact@v7
+        with:
+          name: "wheels-${{ matrix.pkg }}"
+          path: wheelhouse/*.whl
+          if-no-files-found: error
+
+  apk:
+    needs: wheels
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Set up Python 3.13
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.13"
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v6
+        with:
+          gradle-version: "8.10.2"
+
+      - name: Download all wheels
+        uses: actions/download-artifact@v8
+        with:
+          pattern: "wheels-*"
+          merge-multiple: true
+          path: wheels
+
+      - name: Show downloaded wheels
+        run: ls -l wheels
+
+      - name: Patch fmod_toolkit
+        run: python patch_unitypy.py
+
+      - name: Pull upstream builder code + bases
+        run: bash setup.sh
+
+      - name: Pin Chaquopy Python to 3.13
+        run: |
+          sed -i -E '/^chaquopy \{/,/^\}/ s/version = "3\.[0-9]+"/version = "3.13"/' app/build.gradle.kts
+          echo "--- chaquopy block ---"
+          sed -n '/^chaquopy {/,/^}/p' app/build.gradle.kts
+          grep -q 'version = "3.13"' app/build.gradle.kts \
+            || { echo "::error::no 'version = \"3.13\"' in chaquopy block of app/build.gradle.kts"; exit 1; }
+
+      - name: Restrict architecture to arm64-v8a
+        run: sed -i 's/listOf("arm64-v8a", "x86_64")/listOf("arm64-v8a")/' app/build.gradle.kts
+
+      - name: Accept Android SDK licenses
+        run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null || true
+
+      - name: Build APK
+        run: gradle :app:assembleDebug --stacktrace
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v7
+        with:
+          name: gs6builder-android
+          path: app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
+
+      - name: Upload all wheels bundle
+        uses: actions/upload-artifact@v7
+        with:
+          name: wheels-all
+          path: wheels/*.whl

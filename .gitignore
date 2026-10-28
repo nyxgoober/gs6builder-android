@@ -1,0 +1,5 @@
+/wheels/*.whl
+/upstream/
+build/
+.gradle/
+local.properties

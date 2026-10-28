@@ -1,0 +1,5 @@
+# Pillow comes from Chaquopy's own repo; everything native below comes from ../wheels (built by CI).
+Pillow
+UnityPy==1.24.2   # upstream encode.py breaks on 1.25.x (ObjectReader.stripped was renamed)
+rg-converters>=2.2.2
+cricodecs>=1.2.0
