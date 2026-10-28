@@ -8,7 +8,7 @@ import java.io.File
 
 object FfmpegBinaries {
 
-    private const val TAG = "FfmpegBinaries"l
+    private const val TAG = "FfmpegBinaries"
     private val LIBRARY_MANIFEST: Map<String, String> = mapOf(
         "libavcodec.so.62" to "libavcodec_v62.so",
         "libavdevice.so.62" to "libavdevice_v62.so",
