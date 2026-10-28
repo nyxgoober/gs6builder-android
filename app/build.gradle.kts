@@ -29,6 +29,7 @@ chaquopy {
     defaultConfig {
         version = "3.11"           
         buildPython("python3")    
+        extractPackages("archspec")   // archspec reads ../json/cpu/*.json via __file__, so it must live on disk
         pip {
             options("--find-links", rootProject.file("wheels").absolutePath)
             install("-r", "requirements-android.txt")
