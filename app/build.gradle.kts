@@ -1,3 +1,5 @@
+import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
@@ -7,7 +9,7 @@ plugins {
 
 android {
     namespace = "com.utsk.gs6builder"
-    compileSdk = 35
+    compileSdk = 37
     defaultConfig {
         applicationId = "com.utsk.gs6builder"
         minSdk = 29          // MediaStore.Downloads needs no storage permission from here up
@@ -21,8 +23,11 @@ android {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
-    kotlinOptions { jvmTarget = "17" }
     packaging { jniLibs { useLegacyPackaging = true } }
+}
+
+kotlin {
+    compilerOptions { jvmTarget.set(JvmTarget.JVM_17) }
 }
 
 chaquopy {
@@ -38,10 +43,14 @@ chaquopy {
 }
 
 dependencies {
-    val bom = platform("androidx.compose:compose-bom:2024.10.01")
-    implementation(bom)
-    implementation("androidx.activity:activity-compose:1.9.3")
-    implementation("androidx.compose.material3:material3")
-    implementation("androidx.compose.ui:ui")
+    val miuix = "0.9.4"
+    implementation("androidx.activity:activity-compose:1.13.0")
+    implementation("org.jetbrains.compose.foundation:foundation:1.12.0")
+    implementation("org.jetbrains.compose.ui:ui:1.12.0")
+    implementation("top.yukonga.miuix.kmp:miuix-ui-android:$miuix")
+    implementation("top.yukonga.miuix.kmp:miuix-preference-android:$miuix")
+    implementation("top.yukonga.miuix.kmp:miuix-icons-android:$miuix")
+    implementation("io.github.kyant0:backdrop:2.0.1")
+    implementation("io.github.kyant0:shapes:1.2.1")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
 }

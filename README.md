@@ -77,3 +77,11 @@ CC Archive imports.
 
 `UnityPy` is pinned to 1.24.2 because upstream's `encode.py` relies on `ObjectReader.stripped` which was
 renamed in 1.25.x.
+## UI (miuix branch)
+
+The UI uses [Miuix](https://github.com/compose-miuix-ui/miuix) components with four bottom tabs
+(Import, Files, Metadata, Settings). The tab bar is Kyant0's
+[AndroidLiquidGlass](https://github.com/Kyant0/AndroidLiquidGlass) `backdrop` library plus the
+catalog's `LiquidBottomTabs` (copied into `app/src/main/java/com/utsk/gs6builder/glass`, Apache-2.0).
+It needs Android 13+ for the glass effect and falls back to Miuix's plain `NavigationBar` below that.
+Build needs AGP 9.4, Gradle 9.x, JDK 17 and compileSdk 37.
