@@ -345,9 +345,8 @@ fun App(b: Backend, s: AppSettings, dark: Boolean) {
                         targetState = page,
                         transitionSpec = {
                             val forward = targetState > initialState
-                            val spec = tween<Float>(240)
-                            (slideInHorizontally(spec) { full -> if (forward) full else -full } togetherWith
-                                slideOutHorizontally(spec) { full -> if (forward) -full else full })
+                            (slideInHorizontally(tween(240)) { full -> if (forward) full else -full } togetherWith
+                                slideOutHorizontally(tween(240)) { full -> if (forward) -full else full })
                         },
                         label = "page",
                     ) { p ->
