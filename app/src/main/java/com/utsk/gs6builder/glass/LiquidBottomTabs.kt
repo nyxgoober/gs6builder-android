@@ -50,7 +50,6 @@ import com.kyant.backdrop.highlight.Highlight
 import com.kyant.backdrop.shadow.InnerShadow
 import com.kyant.backdrop.shadow.Shadow
 import com.kyant.shapes.Capsule
-import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.launch
 import kotlin.math.abs
@@ -109,6 +108,8 @@ fun LiquidBottomTabs(
                     val targetIndex = targetValue.fastRoundToInt().fastCoerceIn(0, tabsCount - 1)
                     currentIndex = targetIndex
                     animateToValue(targetIndex.toFloat())
+                    // Dropping the selector on a tab selects it (pages switch too).
+                    onTabSelected(targetIndex)
                     animationScope.launch {
                         offsetAnimation.animateTo(
                             0f,
@@ -127,12 +128,12 @@ fun LiquidBottomTabs(
                 }
             )
         }
-        // One stable collector: fires on both taps (selectedTabIndex) and drags (currentIndex),
-        // so the selector animates no matter how the selection changed.
+        // One stable collector: animates to every change of selectedTabIndex.
+        // collect (not collectLatest) so a running animation is never cancelled mid-flight.
         LaunchedEffect(dampedDragAnimation) {
             snapshotFlow { selectedTabIndex() }
                 .drop(1)
-                .collectLatest { index ->
+                .collect { index ->
                     currentIndex = index
                     dampedDragAnimation.animateToValue(index.toFloat())
                     onTabSelected(index)

@@ -8,13 +8,10 @@ import androidx.activity.SystemBarStyle
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.core.tween
-import androidx.compose.animation.slideInHorizontally
-import androidx.compose.animation.slideOutHorizontally
-import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -36,6 +33,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.paint
@@ -331,28 +329,30 @@ fun App(b: Backend, s: AppSettings, dark: Boolean) {
     Scaffold(topBar = { SmallTopAppBar(title = TAB_LABELS[page]) }) { pad ->
         Box(Modifier.fillMaxSize()) {
             // Page content. It is also the backdrop the glass bar refracts.
+            // A real pager: pages slide along the bar axis and never overlap.
             Box(Modifier.fillMaxSize().layerBackdrop(backdrop).background(MiuixTheme.colorScheme.surface)) {
-                val scroll = when (page) { 1 -> filesScroll; 2 -> metaScroll; else -> settingsScroll }
-                Column(
-                    Modifier.fillMaxSize().verticalScroll(scroll)
-                        .padding(top = pad.calculateTopPadding(),
-                            bottom = with(density) { bottomPx.toDp() } + pad.calculateBottomPadding())
-                        .padding(horizontal = 12.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    // Slide the new page in from the side it came from (tab order).
-                    AnimatedContent(
-                        targetState = page,
-                        transitionSpec = {
-                            val forward = targetState > initialState
-                            (slideInHorizontally(tween(240)) { full -> if (forward) full else -full } togetherWith
-                                slideOutHorizontally(tween(240)) { full -> if (forward) -full else full })
-                        },
-                        label = "page",
-                    ) { p ->
+                val pagerState = rememberPagerState(initialPage = 0, pageCount = { 3 })
+                LaunchedEffect(pagerState) {
+                    snapshotFlow { pagerState.settledPage }.collect { p ->
+                        val np = p + 1
+                        if (page != np) { page = np; barIndex = np }
+                    }
+                }
+                LaunchedEffect(page) {
+                    if (pagerState.settledPage != page - 1) pagerState.animateScrollToPage(page - 1)
+                }
+                HorizontalPager(state = pagerState, modifier = Modifier.fillMaxSize()) { p ->
+                    val scroll = when (p) { 0 -> filesScroll; 1 -> metaScroll; else -> settingsScroll }
+                    Column(
+                        Modifier.fillMaxSize().verticalScroll(scroll)
+                            .padding(top = pad.calculateTopPadding(),
+                                bottom = with(density) { bottomPx.toDp() } + pad.calculateBottomPadding())
+                            .padding(horizontal = 12.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
                         when (p) {
-                            1 -> FilesPage(st, pickFile, ::checkRow)
-                            2 -> MetadataPage(st,
+                            0 -> FilesPage(st, pickFile, ::checkRow)
+                            1 -> MetadataPage(st,
                                 onRegen = { st.set("identifier", b.call("new_uuid")) },
                                 onCopy = { b.copyText(st.str("identifier")); status = "Identifier copied." })
                             else -> SettingsPage(s, onNewProject = { confirmReset = true })
