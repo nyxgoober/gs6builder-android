@@ -32,6 +32,4 @@ class AppSettings(context: Context) {
     var themeMode by IntSetting(sp, "theme_mode", 0)
     var monet by BoolSetting(sp, "monet", false)
     var glassBar by BoolSetting(sp, "glass_bar", true)
-    var compileIosByDefault by BoolSetting(sp, "ios_default", false)
-    var compileZipByDefault by BoolSetting(sp, "zip_default", false)
 }

@@ -15,13 +15,11 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.foundation.verticalScroll
@@ -40,9 +38,10 @@ import androidx.compose.ui.draw.paint
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.vector.rememberVectorPainter
+import androidx.compose.ui.text.font.Font
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.state.ToggleableState
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -61,7 +60,6 @@ import org.json.JSONObject
 import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.basic.ButtonDefaults
 import top.yukonga.miuix.kmp.basic.Card
-import top.yukonga.miuix.kmp.basic.Checkbox
 import top.yukonga.miuix.kmp.basic.LinearProgressIndicator
 import top.yukonga.miuix.kmp.basic.NavigationBar
 import top.yukonga.miuix.kmp.basic.NavigationBarItem
@@ -81,6 +79,7 @@ import top.yukonga.miuix.kmp.preference.OverlayDropdownPreference
 import top.yukonga.miuix.kmp.theme.ColorSchemeMode
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.theme.ThemeController
+import top.yukonga.miuix.kmp.theme.defaultTextStyles
 import java.io.File
 import java.util.function.Consumer
 
@@ -109,10 +108,23 @@ fun Root(activity: ComponentActivity, b: Backend, s: AppSettings) {
         onDispose {}
     }
 
-    MiuixTheme(controller = controller) { App(b, s, dark) }
+    // Inter, applied to every Miuix text style.
+    val inter = remember { FontFamily(Font(R.font.inter_variable)) }
+    val interStyles = remember(inter) {
+        val d = defaultTextStyles()
+        d.copy(
+            main = d.main.copy(fontFamily = inter), paragraph = d.paragraph.copy(fontFamily = inter),
+            body1 = d.body1.copy(fontFamily = inter), body2 = d.body2.copy(fontFamily = inter),
+            button = d.button.copy(fontFamily = inter), footnote1 = d.footnote1.copy(fontFamily = inter),
+            footnote2 = d.footnote2.copy(fontFamily = inter), headline1 = d.headline1.copy(fontFamily = inter),
+            headline2 = d.headline2.copy(fontFamily = inter), subtitle = d.subtitle.copy(fontFamily = inter),
+            title1 = d.title1.copy(fontFamily = inter), title2 = d.title2.copy(fontFamily = inter),
+            title3 = d.title3.copy(fontFamily = inter), title4 = d.title4.copy(fontFamily = inter),
+        )
+    }
+    MiuixTheme(controller = controller, textStyles = interStyles) { App(b, s, dark) }
 }
 
-private fun toggle(v: Boolean) = if (v) ToggleableState.On else ToggleableState.Off
 
 @Composable
 fun App(b: Backend, s: AppSettings, dark: Boolean) {
@@ -135,11 +147,10 @@ fun App(b: Backend, s: AppSettings, dark: Boolean) {
     var pendingOverwrite by remember { mutableStateOf<(() -> Unit)?>(null) }
     var confirmReset by remember { mutableStateOf(false) }
 
-    // Per-run switches start from the Settings defaults until the user flips them.
-    var iosOverride by remember { mutableStateOf<Boolean?>(null) }
-    var zipOverride by remember { mutableStateOf<Boolean?>(null) }
-    val includeIos = iosOverride ?: s.compileIosByDefault
-    val alsoZip = zipOverride ?: s.compileZipByDefault
+    // Per-run switches, chosen in the sheet that opens when Compile is pressed.
+    var showCompile by remember { mutableStateOf(false) }
+    var compileIos by remember { mutableStateOf(false) }
+    var compileZip by remember { mutableStateOf(false) }
 
     var bottomPx by remember { mutableIntStateOf(0) }
     val filesScroll = rememberScrollState()
@@ -149,6 +160,26 @@ fun App(b: Backend, s: AppSettings, dark: Boolean) {
     val useGlass = s.glassBar && isRuntimeShaderSupported()
 
     // ---- helpers -------------------------------------------------------------------------
+    /** Everything required before a compile is meaningful, human-readable for the "why not" dialog. */
+    fun missingFields(): List<String> {
+        val missing = mutableListOf<String>()
+        fun need(ok: Boolean, label: String) { if (!ok) missing.add(label) }
+        need(st.str("jacket").isNotBlank(), "Jacket (image) — Files tab")
+        need(st.str("track").isNotBlank(), "Audio track — Files tab")
+        need(st.str("track_pre").isNotBlank(), "Preview audio — Files tab")
+        var hasChart = false
+        val charts = st.arr("charts")
+        for (i in 0 until charts.length()) if (charts.getJSONObject(i).optString("path").isNotBlank()) hasChart = true
+        need(hasChart, "At least one chart file — Files tab")
+        for ((key, label) in listOf(
+            "title" to "Title", "charter" to "Charter", "lyricist" to "Lyricist", "composer" to "Composer",
+            "arranger" to "Arranger", "artist" to "Artist", "vocals" to "Vocals",
+        )) need(st.str(key).isNotBlank(), "$label — Metadata tab")
+        if (st.arr("alt_vocals").length() > 0 && st.str("default_vocal_name").isBlank())
+            missing.add("Default vocal name — Files tab")
+        return missing
+    }
+
     fun runPy(label: String, block: suspend () -> Unit) {
         if (busy) return
         busy = true; status = label
@@ -159,7 +190,19 @@ fun App(b: Backend, s: AppSettings, dark: Boolean) {
             finally { busy = false }
         }
     }
-    val log = Consumer<String> { status = it }
+    /** Python progress lines, translated to something a chart maker cares about. */
+    val log = Consumer<String> { raw ->
+        status = when {
+            raw.startsWith("ffmpeg wav:") || raw.startsWith("ACB:") -> "Packing ACB audio…"
+            raw.startsWith("ffmpeg m1v:") || raw.startsWith("USM:") || raw.contains("live/2dmode") -> "Processing video…"
+            raw.contains("] jacket") -> "Processing jacket…"
+            raw.contains("music_score") -> "Preparing music scores…"
+            raw.contains("music/") -> "Packing music…"
+            raw.startsWith("packing ") -> "Packing chart bundle…"
+            raw.startsWith("preparing charts") -> "Preparing charts…"
+            else -> raw
+        }
+    }
 
     fun checkRow(row: JSONObject, lenient: Boolean) = runPy("Reading chart…") {
         val r = JSONObject(withContext(Dispatchers.IO) { b.call("check_chart", row.getString("path"), lenient) })
@@ -187,7 +230,7 @@ fun App(b: Backend, s: AppSettings, dark: Boolean) {
     }
 
     LaunchedEffect(Unit) {
-        try { withContext(Dispatchers.IO) { b.init() }; ready = true; status = "Ready." }
+        try { withContext(Dispatchers.IO) { b.init() }; ready = true; status = "" }
         catch (e: Exception) { message = e.message ?: e.toString(); status = "Setup failed" }
     }
 
@@ -203,7 +246,7 @@ fun App(b: Backend, s: AppSettings, dark: Boolean) {
             (if (pathsKey != null) "\n\nIdentifier (keep it to update this chart later):\n" + res.getString("identifier") else "")
     }
 
-    fun buildZip() = runPy("Building zip…") {
+    fun buildZip() = runPy("Building project zip…") {
         val (text, errs) = withContext(Dispatchers.IO) {
             val r = JSONObject(b.call("build_zip", st.p.toString(), b.outDir.absolutePath))
             val e = errorList(r)
@@ -212,7 +255,7 @@ fun App(b: Backend, s: AppSettings, dark: Boolean) {
         if (errs.isNotEmpty()) errors = errs else message = text
     }
 
-    fun compile() = runPy("Compiling… this can take a while") {
+    fun compile(includeIos: Boolean, alsoZip: Boolean) = runPy("Compiling…") {
         val (text, errs) = withContext(Dispatchers.IO) {
             val r = JSONObject(b.call("compile_chart", st.p.toString(), b.outDir.absolutePath, includeIos, log))
             val e = errorList(r)
@@ -242,6 +285,8 @@ fun App(b: Backend, s: AppSettings, dark: Boolean) {
             (if (notes?.optBoolean("preview_cut") == true) "\n\nPreview cut to the first 45 s; replace it if you like." else "") +
             "\n\nCheck difficulty/level, then fill in the remaining required metadata (Lyricist, Composer, Arranger, Vocals)."
     }
+
+    fun closeCompileSheet() { showCompile = false }
 
     fun closeImportSheet() { showImport = false; barIndex = page }
 
@@ -312,20 +357,26 @@ fun App(b: Backend, s: AppSettings, dark: Boolean) {
                 Card(Modifier.fillMaxWidth().padding(horizontal = 12.dp), insideMargin = PaddingValues(12.dp)) {
                     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         if (busy) LinearProgressIndicator(Modifier.fillMaxWidth())
-                        Text(status, style = MiuixTheme.textStyles.footnote1, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                            Checkbox(state = toggle(includeIos), onClick = { iosOverride = !includeIos })
-                            Text("iOS", style = MiuixTheme.textStyles.footnote1)
-                            Spacer(Modifier.width(12.dp))
-                            Checkbox(state = toggle(alsoZip), onClick = { zipOverride = !alsoZip })
-                            Text("Also ZIP", style = MiuixTheme.textStyles.footnote1)
-                        }
+                        if (status.isNotEmpty()) Text(status, style = MiuixTheme.textStyles.footnote1, maxLines = 2, overflow = TextOverflow.Ellipsis)
                     }
                 }
                 Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Button(modifier = Modifier.weight(1f), enabled = ready && !busy, onClick = { buildZip() }) { Text("Build zip") }
-                    Button(modifier = Modifier.weight(1f), enabled = ready && !busy,
-                        colors = ButtonDefaults.buttonColorsPrimary(), onClick = { compile() }) { Text("Compile") }
+                    val missing = if (ready) missingFields() else emptyList()
+                    val canCompile = ready && missing.isEmpty()
+                    Button(
+                        modifier = Modifier.weight(1f), enabled = !busy,
+                        colors = if (canCompile) ButtonDefaults.buttonColorsPrimary() else ButtonDefaults.buttonColors(),
+                        onClick = {
+                            when {
+                                !ready -> message = "Still starting up, give it a few seconds."
+                                else -> {
+                                    val why = missingFields()
+                                    if (why.isNotEmpty()) errors = why else showCompile = true
+                                }
+                            }
+                        },
+                    ) { Text("Compile") }
                 }
                 if (useGlass) {
                     val painters = tabIcons.map { rememberVectorPainter(it) }
@@ -376,6 +427,33 @@ fun App(b: Backend, s: AppSettings, dark: Boolean) {
                         colors = ButtonDefaults.buttonColorsPrimary(),
                         onClick = { requestImport() },
                     ) { Text(if (importKind == 2) "Choose .zip…" else "Import") }
+                }
+            }
+
+            // The per-run compile choices, mirroring the Import sheet.
+            OverlayBottomSheet(show = showCompile, title = "Compile", onDismissRequest = { closeCompileSheet() }) {
+                Column(Modifier.padding(bottom = 16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    OverlayDropdownPreference(
+                        items = listOf("No", "Yes"), selectedIndex = if (compileIos) 1 else 0, title = "Also compile iOS version",
+                        onSelectedIndexChange = { compileIos = it == 1 },
+                    )
+                    OverlayDropdownPreference(
+                        items = listOf("No", "Yes"), selectedIndex = if (compileZip) 1 else 0, title = "Also build project ZIP",
+                        onSelectedIndexChange = { compileZip = it == 1 },
+                    )
+                    Button(
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp),
+                        colors = ButtonDefaults.buttonColorsPrimary(),
+                        onClick = { closeCompileSheet(); compile(compileIos, compileZip) },
+                    ) { Text("Compile") }
+                }
+            }
+
+            // While Python works, lock the whole app behind an unclosable progress dialog.
+            OverlayDialog(show = busy, title = "Working…", onDismissRequest = {}) {
+                Column(Modifier.fillMaxWidth().padding(top = 8.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    LinearProgressIndicator(Modifier.fillMaxWidth())
+                    Text(status, style = MiuixTheme.textStyles.footnote1, modifier = Modifier.fillMaxWidth())
                 }
             }
 

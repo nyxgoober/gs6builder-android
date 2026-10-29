@@ -67,7 +67,7 @@ private fun FileRow(label: String, path: String, onPick: () -> Unit, onClear: ((
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         Column(Modifier.weight(1f)) {
             if (label.isNotEmpty()) Hint(label)
-            Text(if (path.isBlank()) "— none —" else File(path).name, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(if (path.isBlank()) "-" else File(path).name, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
         Button(onClick = onPick) { Text("Choose") }
         if (onClear != null) TextButton(text = "✕", onClick = onClear)
@@ -134,7 +134,7 @@ internal fun FilesPage(st: Store, pickFile: PickFile, check: (JSONObject, Boolea
 
     Section("Charts") {
         val rows = st.arr("charts")
-        Pad { Hint("1–6 charts: .sus, .usc or Next SEKAI / Chart Cyanvas LevelData (.json, .json.gz, .nsld). Combo is derived automatically.") }
+        Pad { Hint("Formats: .sus, .usc, Next SEKAI / Chart Cyanvas LevelData (.json, .json.gz, .nsld). Combo is automatic.") }
         for (i in 0 until rows.length()) {
             val r = rows.getJSONObject(i)
             Choice("Difficulty", r.getString("difficulty"), DIFFICULTIES) { r.put("difficulty", it); st.touch() }
@@ -247,12 +247,6 @@ internal fun SettingsPage(s: AppSettings, onNewProject: () -> Unit) {
             SwitchPreference(checked = s.glassBar, onCheckedChange = { s.glassBar = it },
                 title = "Liquid glass tab bar", summary = "Turn off for the plain Miuix bar")
         }
-    }
-    Section("Compile") {
-        SwitchPreference(checked = s.compileIosByDefault, onCheckedChange = { s.compileIosByDefault = it },
-            title = "Compile iOS version by default", summary = "Can still be switched per run")
-        SwitchPreference(checked = s.compileZipByDefault, onCheckedChange = { s.compileZipByDefault = it },
-            title = "Also build ZIP by default", summary = "Compile saves the project zip too")
     }
     Section("Project") {
         ArrowPreference(title = "New project", summary = "Clear every field and start over", onClick = onNewProject)
