@@ -95,9 +95,7 @@ fun LiquidBottomTabs(
 
         val isLtr = LocalLayoutDirection.current == LayoutDirection.Ltr
         val animationScope = rememberCoroutineScope()
-        var currentIndex by remember(selectedTabIndex) {
-            mutableIntStateOf(selectedTabIndex())
-        }
+        var currentIndex by remember { mutableIntStateOf(selectedTabIndex()) }
         val dampedDragAnimation = remember(animationScope) {
             DampedDragAnimation(
                 animationScope = animationScope,
@@ -129,16 +127,13 @@ fun LiquidBottomTabs(
                 }
             )
         }
-        LaunchedEffect(selectedTabIndex) {
-            snapshotFlow { selectedTabIndex() }
-                .collectLatest { index ->
-                    currentIndex = index
-                }
-        }
+        // One stable collector: fires on both taps (selectedTabIndex) and drags (currentIndex),
+        // so the selector animates no matter how the selection changed.
         LaunchedEffect(dampedDragAnimation) {
-            snapshotFlow { currentIndex }
+            snapshotFlow { selectedTabIndex() }
                 .drop(1)
                 .collectLatest { index ->
+                    currentIndex = index
                     dampedDragAnimation.animateToValue(index.toFloat())
                     onTabSelected(index)
                 }

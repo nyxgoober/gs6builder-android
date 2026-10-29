@@ -8,12 +8,16 @@ import androidx.activity.SystemBarStyle
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -43,7 +47,6 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.chaquo.python.PyException
@@ -59,7 +62,6 @@ import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.basic.ButtonDefaults
-import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.LinearProgressIndicator
 import top.yukonga.miuix.kmp.basic.NavigationBar
 import top.yukonga.miuix.kmp.basic.NavigationBarItem
@@ -76,6 +78,7 @@ import top.yukonga.miuix.kmp.icon.extended.Settings
 import top.yukonga.miuix.kmp.overlay.OverlayBottomSheet
 import top.yukonga.miuix.kmp.overlay.OverlayDialog
 import top.yukonga.miuix.kmp.preference.OverlayDropdownPreference
+import top.yukonga.miuix.kmp.preference.SwitchPreference
 import top.yukonga.miuix.kmp.theme.ColorSchemeMode
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.theme.ThemeController
@@ -164,19 +167,19 @@ fun App(b: Backend, s: AppSettings, dark: Boolean) {
     fun missingFields(): List<String> {
         val missing = mutableListOf<String>()
         fun need(ok: Boolean, label: String) { if (!ok) missing.add(label) }
-        need(st.str("jacket").isNotBlank(), "Jacket (image) — Files tab")
-        need(st.str("track").isNotBlank(), "Audio track — Files tab")
-        need(st.str("track_pre").isNotBlank(), "Preview audio — Files tab")
+        need(st.str("jacket").isNotBlank(), "Jacket (image)")
+        need(st.str("track").isNotBlank(), "Audio track")
+        need(st.str("track_pre").isNotBlank(), "Preview audio")
         var hasChart = false
         val charts = st.arr("charts")
         for (i in 0 until charts.length()) if (charts.getJSONObject(i).optString("path").isNotBlank()) hasChart = true
-        need(hasChart, "At least one chart file — Files tab")
+        need(hasChart, "At least one chart file")
         for ((key, label) in listOf(
             "title" to "Title", "charter" to "Charter", "lyricist" to "Lyricist", "composer" to "Composer",
             "arranger" to "Arranger", "artist" to "Artist", "vocals" to "Vocals",
-        )) need(st.str(key).isNotBlank(), "$label — Metadata tab")
+        )) need(st.str(key).isNotBlank(), label)
         if (st.arr("alt_vocals").length() > 0 && st.str("default_vocal_name").isBlank())
-            missing.add("Default vocal name — Files tab")
+            missing.add("Default vocal name")
         return missing
     }
 
@@ -187,7 +190,7 @@ fun App(b: Backend, s: AppSettings, dark: Boolean) {
             try { block() }
             catch (e: PyException) { message = e.message ?: "Python error" }
             catch (e: Exception) { message = e.message ?: e.toString() }
-            finally { busy = false }
+            finally { busy = false; status = "" }
         }
     }
     /** Python progress lines, translated to something a chart maker cares about. */
@@ -207,7 +210,7 @@ fun App(b: Backend, s: AppSettings, dark: Boolean) {
     fun checkRow(row: JSONObject, lenient: Boolean) = runPy("Reading chart…") {
         val r = JSONObject(withContext(Dispatchers.IO) { b.call("check_chart", row.getString("path"), lenient) })
         when (r.getString("status")) {
-            "ok" -> { row.put("combo", r.getInt("combo").toString()); row.put("lenient", lenient); status = "Chart OK" }
+            "ok" -> { row.put("combo", r.getInt("combo").toString()); row.put("lenient", lenient) }
             "unsupported" -> {
                 val f = r.getJSONArray("features")
                 unsupported = row to (0 until minOf(f.length(), 20)).joinToString("\n") { "• " + f.getString(it) }
@@ -270,7 +273,7 @@ fun App(b: Backend, s: AppSettings, dark: Boolean) {
             parts.joinToString("\n\n") to emptyList<String>()
         }
         if (errs.isNotEmpty()) errors = errs else message = text
-        status = "Done."
+        if (errs.isEmpty() && s.autoCopyId) b.copyText(st.str("identifier"))
     }
 
     fun importProject(json: String, extra: String? = null) {
@@ -337,12 +340,24 @@ fun App(b: Backend, s: AppSettings, dark: Boolean) {
                         .padding(horizontal = 12.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
-                    when (page) {
-                        1 -> FilesPage(st, pickFile, ::checkRow)
-                        2 -> MetadataPage(st,
-                            onRegen = { st.set("identifier", b.call("new_uuid")) },
-                            onCopy = { b.copyText(st.str("identifier")); status = "Identifier copied." })
-                        else -> SettingsPage(s, onNewProject = { confirmReset = true })
+                    // Slide the new page in from the side it came from (tab order).
+                    AnimatedContent(
+                        targetState = page,
+                        transitionSpec = {
+                            val forward = targetState > initialState
+                            val spec = tween<Float>(240)
+                            (slideInHorizontally(spec) { full -> if (forward) full else -full } togetherWith
+                                slideOutHorizontally(spec) { full -> if (forward) -full else full })
+                        },
+                        label = "page",
+                    ) { p ->
+                        when (p) {
+                            1 -> FilesPage(st, pickFile, ::checkRow)
+                            2 -> MetadataPage(st,
+                                onRegen = { st.set("identifier", b.call("new_uuid")) },
+                                onCopy = { b.copyText(st.str("identifier")); status = "Identifier copied." })
+                            else -> SettingsPage(s, onNewProject = { confirmReset = true })
+                        }
                     }
                 }
             }
@@ -354,12 +369,6 @@ fun App(b: Backend, s: AppSettings, dark: Boolean) {
                     .onSizeChanged { bottomPx = it.height },
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                Card(Modifier.fillMaxWidth().padding(horizontal = 12.dp), insideMargin = PaddingValues(12.dp)) {
-                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        if (busy) LinearProgressIndicator(Modifier.fillMaxWidth())
-                        if (status.isNotEmpty()) Text(status, style = MiuixTheme.textStyles.footnote1, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                    }
-                }
                 Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Button(modifier = Modifier.weight(1f), enabled = ready && !busy, onClick = { buildZip() }) { Text("Build zip") }
                     val missing = if (ready) missingFields() else emptyList()
@@ -433,14 +442,10 @@ fun App(b: Backend, s: AppSettings, dark: Boolean) {
             // The per-run compile choices, mirroring the Import sheet.
             OverlayBottomSheet(show = showCompile, title = "Compile", onDismissRequest = { closeCompileSheet() }) {
                 Column(Modifier.padding(bottom = 16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    OverlayDropdownPreference(
-                        items = listOf("No", "Yes"), selectedIndex = if (compileIos) 1 else 0, title = "Also compile iOS version",
-                        onSelectedIndexChange = { compileIos = it == 1 },
-                    )
-                    OverlayDropdownPreference(
-                        items = listOf("No", "Yes"), selectedIndex = if (compileZip) 1 else 0, title = "Also build project ZIP",
-                        onSelectedIndexChange = { compileZip = it == 1 },
-                    )
+                    SwitchPreference(checked = compileIos, onCheckedChange = { compileIos = it },
+                        title = "Also compile iOS version")
+                    SwitchPreference(checked = compileZip, onCheckedChange = { compileZip = it },
+                        title = "Also build project ZIP")
                     Button(
                         modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp),
                         colors = ButtonDefaults.buttonColorsPrimary(),

@@ -102,6 +102,14 @@ private fun JSONArray.without(i: Int): JSONArray {
     return a
 }
 
+/** Guess the difficulty from a clearly-labelled chart filename (e.g. "master.sus"). */
+internal fun inferDifficulty(path: String): String? {
+    val stem = File(path).name.lowercase().substringBeforeLast('.').trim()
+    return DIFFICULTIES.firstOrNull { d ->
+        stem == d || (stem.startsWith(d) && stem.getOrNull(d.length) in listOf('-', '_', '.', ' ', '('))
+    }
+}
+
 // ---- Files tab: files, charts, vocals --------------------------------------------------------
 
 @Composable
@@ -146,7 +154,11 @@ internal fun FilesPage(st: Store, pickFile: PickFile, check: (JSONObject, Boolea
                 )
                 Hint("combo ${r.optString("combo", "-")}")
                 FileRow("Chart file", r.optString("path"),
-                    onPick = { pickFile("chart$i", ANY) { r.put("path", it); r.put("lenient", false); st.touch(); check(r, false) } },
+                    onPick = { pickFile("chart$i", ANY) {
+                        r.put("path", it)
+                        inferDifficulty(it)?.let { d -> r.put("difficulty", d) }
+                        r.put("lenient", false); st.touch(); check(r, false)
+                    } },
                     onClear = { st.set("charts", rows.without(i)) })
             }
         }
@@ -249,6 +261,8 @@ internal fun SettingsPage(s: AppSettings, onNewProject: () -> Unit) {
         }
     }
     Section("Project") {
+        SwitchPreference(checked = s.autoCopyId, onCheckedChange = { s.autoCopyId = it },
+            title = "Copy identifier after compiling", summary = "Puts the identifier on your clipboard when a compile succeeds")
         ArrowPreference(title = "New project", summary = "Clear every field and start over", onClick = onNewProject)
     }
 }
