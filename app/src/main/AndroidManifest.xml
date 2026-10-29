@@ -3,6 +3,8 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <application
         android:label="GS6 Builder"
+        android:icon="@mipmap/ic_launcher"
+        android:roundIcon="@mipmap/ic_launcher"
         android:extractNativeLibs="true"
         android:largeHeap="true"
         android:theme="@style/Theme.GS6">
