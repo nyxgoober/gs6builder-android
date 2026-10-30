@@ -129,7 +129,7 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v6
         with:
-          gradle-version: "8.10.2"
+          gradle-version: "9.7.1"
 
       - name: Download all wheels
         uses: actions/download-artifact@v8
@@ -160,6 +160,10 @@ jobs:
 
       - name: Accept Android SDK licenses
         run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null || true
+
+      - name: Install Android SDK platform 37
+        run: |
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-37" > /dev/null || true
 
       - name: Build APK
         run: gradle :app:assembleDebug --stacktrace

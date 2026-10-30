@@ -36,12 +36,18 @@ License: AGPL-3.0
 **Output** (saved to `Downloads/GS6Charts/`)
 - **Build zip**: an editable project zip (`ChartInfo.json`, jacket, track, preview, charts, optional music
   videos and cover files).
-- **Compile**: the game-ready `.chart.gs6` for Android. Tick *Also compile iOS version* to produce the iOS
-  file as well.
+- **Compile**: opens a sheet with an *Also build project ZIP* toggle, then produces the game-ready `.chart.gs6` files. When a compile succeeds the identifier is copied
+  to the clipboard automatically (toggleable in Settings).
+
+The Compile button is greyed out until the required fields are filled in; tapping it while greyed lists
+every missing field. While the app works (importing, compiling, building) a non-closable progress popup
+locks the UI and shows  progress text ("Packing ACB audio…", "Processing video…", "Processing
+jacket…").
 
 Before building, every input is validated (files exist, the image is valid, audio and video files contain
 the expected streams, previews are short enough, difficulties are unique, levels are in range, identifier is
-well formed) and any problems are shown in a list.
+well formed) and any problems are shown in a list. Chart filenames that are clearly labelled (e.g.
+`master.sus`, `normal.json`) preselect the difficulty automatically; you can always change it manually.
 
 The Tkinter window of the desktop builder is replaced by a Jetpack Compose UI. The upstream Python modules
 (`charts.py`, `encode.py`, `untitledcharts.py`, `ccarchive.py`, `deps.py`) run unmodified inside the app
@@ -74,3 +80,12 @@ CC Archive imports.
 
 `UnityPy` is pinned to 1.24.2 because upstream's `encode.py` relies on `ObjectReader.stripped` which was
 renamed in 1.25.x.
+## UI
+
+The UI uses [Miuix](https://github.com/compose-miuix-ui/miuix) components in [Inter](https://rsms.me/inter/)
+with four bottom tabs: Import (a sheet), Files, Metadata and Settings. Tabs switch pages with a simple
+horizontal slide. The tab bar is Kyant0's
+[AndroidLiquidGlass](https://github.com/Kyant0/AndroidLiquidGlass) `backdrop` library plus the
+catalog's `LiquidBottomTabs` (copied into `app/src/main/java/com/utsk/gs6builder/glass`, Apache-2.0).
+It needs Android 13+ for the glass effect and falls back to Miuix's plain `NavigationBar` below that.
+Build needs AGP 9.4, Gradle 9.x, JDK 17 and compileSdk 37.
