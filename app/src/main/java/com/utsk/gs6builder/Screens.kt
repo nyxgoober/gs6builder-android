@@ -245,7 +245,10 @@ internal fun MetadataPage(st: Store, onRegen: () -> Unit, onCopy: () -> Unit) {
 // ---- Settings tab ----------------------------------------------------------------------------
 
 @Composable
-internal fun SettingsPage(s: AppSettings, onNewProject: () -> Unit) {
+internal fun SettingsPage(
+    s: AppSettings, onNewProject: () -> Unit,
+    version: String, checkingUpdate: Boolean, onCheckUpdate: () -> Unit,
+) {
     Section("Appearance") {
         OverlayDropdownPreference(
             items = listOf("Follow system", "Light", "Dark"), selectedIndex = s.themeMode,
@@ -264,5 +267,15 @@ internal fun SettingsPage(s: AppSettings, onNewProject: () -> Unit) {
         SwitchPreference(checked = s.autoCopyId, onCheckedChange = { s.autoCopyId = it },
             title = "Copy identifier after compiling", summary = "Puts the identifier on your clipboard when a compile succeeds")
         ArrowPreference(title = "New project", summary = "Clear every field and start over", onClick = onNewProject)
+    }
+    Section("Updates") {
+        SwitchPreference(checked = s.updateCheck, onCheckedChange = { s.updateCheck = it },
+            title = "Check for updates on launch", summary = "Looks up the newest GitHub release each time the app starts")
+        OverlayDropdownPreference(
+            items = listOf("Release (stable only)", "Preview (includes betas)"), selectedIndex = s.updateChannel,
+            title = "Update channel", onSelectedIndexChange = { s.updateChannel = it },
+        )
+        ArrowPreference(title = "Check for updates", summary = if (checkingUpdate) "Checking…" else "Current version $version",
+            onClick = { if (!checkingUpdate) onCheckUpdate() })
     }
 }

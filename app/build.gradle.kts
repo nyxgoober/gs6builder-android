@@ -14,8 +14,8 @@ android {
         applicationId = "com.utsk.gs6builder"
         minSdk = 29          // MediaStore.Downloads needs no storage permission from here up
         targetSdk = 35
-        versionCode = 1
-        versionName = "0.1.0"
+        versionCode = 2
+        versionName = "2.0.0"
         ndk { abiFilters += listOf("arm64-v8a") }
     }
     buildFeatures { compose = true }

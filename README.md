@@ -36,7 +36,7 @@ License: AGPL-3.0
 **Output** (saved to `Downloads/GS6Charts/`)
 - **Build zip**: an editable project zip (`ChartInfo.json`, jacket, track, preview, charts, optional music
   videos and cover files).
-- **Compile**: opens a sheet with two toggles *Also compile iOS version* and *Also build project ZIP* then produces the game-ready `.chart.gs6` for Android. When a compile succeeds the identifier is copied
+- **Compile**: opens a sheet with an *Also build project ZIP* toggle, then produces the game-ready `.chart.gs6` files. When a compile succeeds the identifier is copied
   to the clipboard automatically (toggleable in Settings).
 
 The Compile button is greyed out until the required fields are filled in; tapping it while greyed lists

@@ -31,6 +31,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
@@ -43,6 +44,7 @@ import androidx.compose.ui.graphics.vector.rememberVectorPainter
 import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.dp
@@ -148,10 +150,39 @@ fun App(b: Backend, s: AppSettings, dark: Boolean) {
     var pendingOverwrite by remember { mutableStateOf<(() -> Unit)?>(null) }
     var confirmReset by remember { mutableStateOf(false) }
 
-    // Per-run switches, chosen in the sheet that opens when Compile is pressed.
+    // Per-run switch, chosen in the sheet that opens when Compile is pressed.
     var showCompile by remember { mutableStateOf(false) }
-    var compileIos by remember { mutableStateOf(false) }
     var compileZip by remember { mutableStateOf(false) }
+
+    // Update check: runs once per launch (if enabled in settings) and on demand from Settings.
+    val context = LocalContext.current
+    val currentVersion = remember { UpdateChecker.currentVersion(context) }
+    var updateTag by remember { mutableStateOf<String?>(null) }
+    var unstableTag by remember { mutableStateOf<String?>(null) }   // pre-release warning, shown after "Update"
+    var checkingUpdate by remember { mutableStateOf(false) }
+    var bootChecked by rememberSaveable { mutableStateOf(false) }
+
+    fun checkForUpdate(manual: Boolean) {
+        if (checkingUpdate) return
+        checkingUpdate = true
+        scope.launch {
+            val r = UpdateChecker.fetchLatestTag(includeUnstable = s.updateChannel == 1)
+            checkingUpdate = false
+            r.onSuccess { tag ->
+                if (UpdateChecker.isNewer(tag, currentVersion)) updateTag = tag
+                else if (manual) message = "You're up to date ($currentVersion)."
+            }.onFailure { e ->
+                if (manual) message = "Couldn't check for updates: ${e.message ?: e.javaClass.simpleName}"
+            }
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        if (!bootChecked) {
+            bootChecked = true
+            if (s.updateCheck) checkForUpdate(false)
+        }
+    }
 
     var bottomPx by remember { mutableIntStateOf(0) }
     val filesScroll = rememberScrollState()
@@ -256,9 +287,9 @@ fun App(b: Backend, s: AppSettings, dark: Boolean) {
         if (errs.isNotEmpty()) errors = errs else message = text
     }
 
-    fun compile(includeIos: Boolean, alsoZip: Boolean) = runPy("Compiling…") {
+    fun compile(alsoZip: Boolean) = runPy("Compiling…") {
         val (text, errs) = withContext(Dispatchers.IO) {
-            val r = JSONObject(b.call("compile_chart", st.p.toString(), b.outDir.absolutePath, includeIos, log))
+            val r = JSONObject(b.call("compile_chart", st.p.toString(), b.outDir.absolutePath, true, log))
             val e = errorList(r)
             if (e.isNotEmpty()) return@withContext "" to e
             val parts = mutableListOf(savedText(r, "outputs"))
@@ -355,7 +386,9 @@ fun App(b: Backend, s: AppSettings, dark: Boolean) {
                             1 -> MetadataPage(st,
                                 onRegen = { st.set("identifier", b.call("new_uuid")) },
                                 onCopy = { b.copyText(st.str("identifier")); status = "Identifier copied." })
-                            else -> SettingsPage(s, onNewProject = { confirmReset = true })
+                            else -> SettingsPage(s, onNewProject = { confirmReset = true },
+                                version = currentVersion, checkingUpdate = checkingUpdate,
+                                onCheckUpdate = { checkForUpdate(true) })
                         }
                     }
                 }
@@ -441,14 +474,12 @@ fun App(b: Backend, s: AppSettings, dark: Boolean) {
             // The per-run compile choices, mirroring the Import sheet.
             OverlayBottomSheet(show = showCompile, title = "Compile", onDismissRequest = { closeCompileSheet() }) {
                 Column(Modifier.padding(bottom = 16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    SwitchPreference(checked = compileIos, onCheckedChange = { compileIos = it },
-                        title = "Also compile iOS version")
                     SwitchPreference(checked = compileZip, onCheckedChange = { compileZip = it },
                         title = "Also build project ZIP")
                     Button(
                         modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp),
                         colors = ButtonDefaults.buttonColorsPrimary(),
-                        onClick = { closeCompileSheet(); compile(compileIos, compileZip) },
+                        onClick = { closeCompileSheet(); compile(compileZip) },
                     ) { Text("Compile") }
                 }
             }
@@ -484,6 +515,26 @@ fun App(b: Backend, s: AppSettings, dark: Boolean) {
                 confirmText = "Continue",
                 onConfirm = { val row = unsupported?.first; unsupported = null; if (row != null) checkRow(row, true) },
                 onDismiss = { unsupported = null },
+            )
+            ConfirmDialog(
+                show = updateTag != null, title = "Update available",
+                body = "Version ${updateTag ?: ""} is out" +
+                    (if (updateTag?.let { UpdateChecker.isUnstable(it) } == true) " (pre-release)" else "") +
+                    " (you have $currentVersion).\n\nOpen the release page in your browser to download it?",
+                confirmText = "Update",
+                onConfirm = {
+                    val t = updateTag; updateTag = null
+                    if (t != null) { if (UpdateChecker.isUnstable(t)) unstableTag = t else UpdateChecker.openRelease(context, t) }
+                },
+                onDismiss = { updateTag = null },
+            )
+            ConfirmDialog(
+                show = unstableTag != null, title = "Unstable build",
+                body = "${unstableTag ?: ""} is a pre-release (alpha, beta, preview or release candidate). " +
+                    "It may not be stable, and things are subject to change.\n\nOpen it anyway?",
+                confirmText = "Open anyway",
+                onConfirm = { val t = unstableTag; unstableTag = null; if (t != null) UpdateChecker.openRelease(context, t) },
+                onDismiss = { unstableTag = null },
             )
             InfoDialog(show = message != null, title = null, body = message ?: "", onDismiss = { message = null })
             InfoDialog(show = errors != null, title = "Cannot build",

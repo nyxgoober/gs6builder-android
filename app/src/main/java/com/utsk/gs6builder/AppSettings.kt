@@ -33,4 +33,7 @@ class AppSettings(context: Context) {
     var monet by BoolSetting(sp, "monet", false)
     var glassBar by BoolSetting(sp, "glass_bar", true)
     var autoCopyId by BoolSetting(sp, "auto_copy_id", true)
+    var updateCheck by BoolSetting(sp, "update_check", true)
+    /** 0 = Release (stable builds only), 1 = Preview (also alpha/beta/pre/rc builds). */
+    var updateChannel by IntSetting(sp, "update_channel", 0)
 }
