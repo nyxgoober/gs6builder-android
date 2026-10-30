@@ -2,6 +2,33 @@ name: Build App
 
 on:
   workflow_dispatch:
+    inputs:
+      release:
+        description: 'Create a GitHub Release?'
+        required: true
+        default: 'false'
+        type: choice
+        options:
+          - 'true'
+          - 'false'
+      prerelease:
+        description: 'Mark as Pre-release?'
+        required: true
+        default: 'false'
+        type: choice
+        options:
+          - 'true'
+          - 'false'
+      version:
+        description: 'Version'
+        required: true
+        default: 'v1.0.0'
+        type: string
+      note:
+        description: 'Release notes'
+        required: true
+        default: 'Initial release'
+        type: string
 
 jobs:
   sync:
@@ -111,6 +138,10 @@ jobs:
   apk:
     needs: wheels
     runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: write
+      attestations: write
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
@@ -168,15 +199,37 @@ jobs:
       - name: Build APK
         run: gradle :app:assembleDebug --stacktrace
 
-      - name: Upload APK
+      - name: Prepare APK for Release
+        if: github.event.inputs.release == 'true'
+        run: |
+          VERSION="${{ github.event.inputs.version }}"
+          cp app/build/outputs/apk/debug/*.apk "com.utsk.gs6builder-${VERSION}.apk"
+
+      - name: Generate Build Attestation
+        if: github.event.inputs.release == 'true'
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: "com.utsk.gs6builder-${{ github.event.inputs.version }}.apk"
+
+      - name: Upload APK Artifact
         uses: actions/upload-artifact@v7
         with:
           name: gs6builder-android
           path: app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
 
-      - name: Upload all wheels bundle
-        uses: actions/upload-artifact@v7
+      - name: Create GitHub Release and Attach APK
+        if: github.event.inputs.release == 'true'
+        uses: softprops/action-gh-release@v2
         with:
-          name: wheels-all
-          path: wheels/*.whl
+          tag_name: ${{ github.event.inputs.version }}
+          name: ${{ github.event.inputs.version }}
+          prerelease: ${{ github.event.inputs.prerelease == 'true' }}
+          body: |
+            # ${{ github.event.inputs.version }}
+            ${{ github.event.inputs.note }}
+
+            Please open up an issue if you find any bugs!
+          files: com.utsk.gs6builder-${{ github.event.inputs.version }}.apk
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
