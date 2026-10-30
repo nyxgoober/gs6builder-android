@@ -43,6 +43,10 @@ class Store {
 class Backend(private val ctx: Context) {
     private val py by lazy { Python.getInstance().getModule("bridge") }
     val projectDir = File(ctx.filesDir, "project").apply { mkdirs() }
+    val appDataDir = ctx.filesDir
+    /** versionName from the manifest (the launcher label users see). */
+    val appVersion: String =
+        ctx.packageManager.getPackageInfo(ctx.packageName, 0).versionName ?: "dev"
     val outDir = File(ctx.cacheDir, "out").apply { mkdirs() }
 
     fun call(name: String, vararg args: Any?): String = py.callAttr(name, *args)?.toString() ?: ""

@@ -5,10 +5,14 @@ import android.net.Uri
 import android.os.Build
 import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.waitForUpOrCancellation
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
@@ -41,6 +45,7 @@ import androidx.compose.ui.draw.paint
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.vector.rememberVectorPainter
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.layout.onSizeChanged
@@ -89,6 +94,14 @@ import java.util.function.Consumer
 /** Tab order: Import is an action (opens a sheet), the other three are real pages. */
 private val TAB_LABELS = listOf("Import", "Files", "Metadata", "Settings")
 private val IMPORT_KINDS = listOf("UntitledCharts link", "Chart Cyanvas (CC Archive) link", ".zip project")
+
+/** Fires once the pointer is held down on this spot for ten seconds without lifting. */
+private fun Modifier.hold10s(onHold: () -> Unit): Modifier = pointerInput(onHold) {
+    awaitEachGesture {
+        awaitFirstDown(requireUnconsumed = false)
+        if (withTimeoutOrNull(10_000) { waitForUpOrCancellation() } == null) onHold()
+    }
+}
 
 @Composable
 fun Root(activity: ComponentActivity, b: Backend, s: AppSettings) {
@@ -153,6 +166,11 @@ fun App(b: Backend, s: AppSettings, dark: Boolean) {
     // Per-run switch, chosen in the sheet that opens when Compile is pressed.
     var showCompile by remember { mutableStateOf(false) }
     var compileZip by remember { mutableStateOf(false) }
+
+    // Licenses page + dev-mode private-data explorer.
+    var showLicenses by remember { mutableStateOf(false) }
+    var devDir by remember { mutableStateOf<File?>(null) }
+    var devFileText by remember { mutableStateOf<Pair<String, String>?>(null) }
 
     // Update check: runs once per launch (if enabled in settings) and on demand from Settings.
     val context = LocalContext.current
@@ -320,6 +338,25 @@ fun App(b: Backend, s: AppSettings, dark: Boolean) {
 
     fun closeCompileSheet() { showCompile = false }
 
+    fun unlockDevTab() {
+        if (!s.devMode) s.devMode = true
+        devDir = b.appDataDir
+    }
+
+    /** Read a private-data file for the dev-mode viewer (text only, small size). */
+    fun openDevFile(f: File) = scope.launch {
+        devFileText = f.name to withContext(Dispatchers.IO) {
+            when {
+                f.length() > 4 * 1024 * 1024 -> "(file too large to show in-app)"
+                else -> {
+                    val bytes = f.inputStream().use { it.readBytes() }
+                    if (bytes.take(1024).any { it == 0.toByte() }) "(binary file — view on a PC)" else
+                        String(bytes, Charsets.UTF_8).ifBlank { "(empty file)" }
+                }
+            }
+        }
+    }
+
     fun closeImportSheet() { showImport = false; barIndex = page }
 
     fun doLinkImport() {
@@ -357,11 +394,23 @@ fun App(b: Backend, s: AppSettings, dark: Boolean) {
     // ---- layout --------------------------------------------------------------------------
     val tabIcons = listOf(MiuixIcons.Import, MiuixIcons.Folder, MiuixIcons.Edit, MiuixIcons.Settings)
 
-    Scaffold(topBar = { SmallTopAppBar(title = TAB_LABELS[page]) }) { pad ->
+    Scaffold(topBar = {
+        SmallTopAppBar(title = when {
+            showLicenses -> "Open-source licenses"
+            devDir != null -> "Private app data"
+            else -> TAB_LABELS[page]
+        })
+    }) { pad ->
+        BackHandler(enabled = showLicenses) { showLicenses = false }
+        BackHandler(enabled = devDir != null) { devDir = null }
         Box(Modifier.fillMaxSize()) {
             // Page content. It is also the backdrop the glass bar refracts.
-            // A real pager: pages slide along the bar axis and never overlap.
             Box(Modifier.fillMaxSize().layerBackdrop(backdrop).background(MiuixTheme.colorScheme.surface)) {
+                if (showLicenses) {
+                    LicensesPage()
+                } else if (devDir != null) {
+                    DevFileExplorer(root = b.appDataDir, onOpenFile = ::openDevFile)
+                } else {
                 val pagerState = rememberPagerState(initialPage = 0, pageCount = { 3 })
                 LaunchedEffect(pagerState) {
                     snapshotFlow { pagerState.settledPage }.collect { p ->
@@ -388,14 +437,16 @@ fun App(b: Backend, s: AppSettings, dark: Boolean) {
                                 onCopy = { b.copyText(st.str("identifier")); status = "Identifier copied." })
                             else -> SettingsPage(s, onNewProject = { confirmReset = true },
                                 version = currentVersion, checkingUpdate = checkingUpdate,
-                                onCheckUpdate = { checkForUpdate(true) })
+                                onCheckUpdate = { checkForUpdate(true) },
+                                onOpenLicenses = { showLicenses = true })
                         }
                     }
                 }
+                }
             }
 
-            // Status, actions and the tab bar float over the bottom of the page.
-            Column(
+            // Status, actions and the tab bar float over the bottom of the page (only on normal pages).
+            if (!showLicenses && devDir == null) Column(
                 Modifier.align(Alignment.BottomCenter).fillMaxWidth()
                     .padding(bottom = pad.calculateBottomPadding())
                     .onSizeChanged { bottomPx = it.height },
@@ -433,7 +484,8 @@ fun App(b: Backend, s: AppSettings, dark: Boolean) {
                     ) {
                         TAB_LABELS.forEachIndexed { i, label ->
                             LiquidBottomTab({ onTab(i) }) {
-                                Box(Modifier.size(28.dp).paint(painters[i], colorFilter = ColorFilter.tint(contentColor)))
+                                val devHold = if (i == 3) Modifier.hold10s { unlockDevTab() } else Modifier
+                                Box(devHold.size(28.dp).paint(painters[i], colorFilter = ColorFilter.tint(contentColor)))
                                 BasicText(label, style = TextStyle(contentColor, 12.sp))
                             }
                         }
@@ -441,7 +493,8 @@ fun App(b: Backend, s: AppSettings, dark: Boolean) {
                 } else {
                     NavigationBar {
                         TAB_LABELS.forEachIndexed { i, label ->
-                            NavigationBarItem(selected = barIndex == i, onClick = { onTab(i) }, icon = tabIcons[i], label = label)
+                            NavigationBarItem(selected = barIndex == i, onClick = { onTab(i) }, icon = tabIcons[i], label = label,
+                                modifier = if (i == 3) Modifier.hold10s { unlockDevTab() } else Modifier)
                         }
                     }
                 }
@@ -536,6 +589,8 @@ fun App(b: Backend, s: AppSettings, dark: Boolean) {
                 onConfirm = { val t = unstableTag; unstableTag = null; if (t != null) UpdateChecker.openRelease(context, t) },
                 onDismiss = { unstableTag = null },
             )
+            InfoDialog(show = devFileText != null, title = devFileText?.first, body = devFileText?.second ?: "",
+                onDismiss = { devFileText = null })
             InfoDialog(show = message != null, title = null, body = message ?: "", onDismiss = { message = null })
             InfoDialog(show = errors != null, title = "Cannot build",
                 body = errors?.joinToString("\n") { "• $it" } ?: "", onDismiss = { errors = null })
@@ -579,7 +634,7 @@ private fun ConfirmDialog(
     }
 }
 
-/** Re-run the combo check for an imported row without UI prompts (imports are always lenient). */
+    /** Re-run the combo check for an imported row without UI prompts (imports are always lenient). */
 private fun checkRowQuiet(scope: CoroutineScope, b: Backend, row: JSONObject, st: Store) {
     scope.launch {
         val r = JSONObject(withContext(Dispatchers.IO) { b.call("check_chart", row.getString("path"), true) })

@@ -1,15 +1,23 @@
 package com.utsk.gs6builder
 
 import android.os.Build
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.KeyboardType
@@ -60,6 +68,12 @@ internal fun Pad(content: @Composable ColumnScope.() -> Unit) {
 @Composable
 private fun Hint(text: String) {
     Text(text, style = MiuixTheme.textStyles.footnote1, color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
+}
+
+@Composable
+private fun HintCardPadded(text: String) {
+    Text(text, style = MiuixTheme.textStyles.footnote1, color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+        modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp))
 }
 
 @Composable
@@ -248,6 +262,7 @@ internal fun MetadataPage(st: Store, onRegen: () -> Unit, onCopy: () -> Unit) {
 internal fun SettingsPage(
     s: AppSettings, onNewProject: () -> Unit,
     version: String, checkingUpdate: Boolean, onCheckUpdate: () -> Unit,
+    onOpenLicenses: () -> Unit,
 ) {
     Section("Appearance") {
         OverlayDropdownPreference(
@@ -277,5 +292,144 @@ internal fun SettingsPage(
         )
         ArrowPreference(title = "Check for updates", summary = if (checkingUpdate) "Checking…" else "Current version $version",
             onClick = { if (!checkingUpdate) onCheckUpdate() })
+    }
+    Section("About") {
+        ArrowPreference(title = "Open-source licenses", summary = "Libraries, fonts and bundled code this app uses", onClick = onOpenLicenses)
+    }
+}
+
+// ---- Open-source licenses + dev file explorer ------------------------------------------------
+
+internal data class LicenseEntry(val title: String, val subtitle: String, val body: String)
+
+internal val LICENSE_ENTRIES: List<LicenseEntry> = listOf(
+    LicenseEntry("GS6 Builder", "GNU AGPL-3.0", "This program is free software: you can redistribute it and/or modify it " +
+        "under the terms of the GNU Affero General Public License as published by the Free Software Foundation, either " +
+        "version 3 of the License, or (at your option) any later version.\n\n" +
+        "This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied " +
+        "warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU Affero General Public License for more " +
+        "details. The complete text ships with the repository's LICENSE file and at https://www.gnu.org/licenses/.\n\n" +
+        "It is an Android port of the GridlessSekai6 custom-chart builder."),
+    LicenseEntry("Apache License 2.0", "Miuix · Kyant0 backdrop & shapes · AndroidLiquidGlass (catalog) · Jetpack Compose & androidx.activity · Compose Multiplatform · kotlinx-coroutines",
+        "Copyrights: Google LLC (Jetpack Compose, androidx.activity); JetBrains (Compose Multiplatform, " +
+        "kotlinx-coroutines); compose-miuix-ui contributors (Miuix); Kyant0 (backdrop, shapes, AndroidLiquidGlass " +
+        "catalog).\n\nLicensed under the Apache License, Version 2.0 (the \"License\"); you may not use these files except " +
+        "in compliance with the License. You may obtain a copy of the License at\n\n" +
+        "http://www.apache.org/licenses/LICENSE-2.0\n\n" +
+        "Unless required by applicable law or agreed to in writing, software distributed under the License is distributed " +
+        "on an \"AS IS\" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for " +
+        "the specific language governing permissions and limitations under the License.\n\n" +
+        "The full license text is included in each source file header where the code was copied into this repository and " +
+        "at the URL above."),
+    LicenseEntry("MIT License", "Chaquopy · UnityPy · texture2ddecoder · etcpak · astc-encoder-py · brotli",
+        "Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated " +
+        "documentation files (the \"Software\"), to deal in the Software without restriction, including without limitation " +
+        "the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and " +
+        "to permit persons to whom the Software is furnished to do so, subject to the following conditions:\n\n" +
+        "The above copyright notice and this permission notice shall be included in all copies or substantial portions of " +
+        "the Software.\n\nTHE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING " +
+        "BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN " +
+        "NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN " +
+        "AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR " +
+        "OTHER DEALINGS IN THE SOFTWARE."),
+    LicenseEntry("MIT-CMU (HPND)", "Pillow",
+        "By obtaining, using, and/or copying this software and/or its associated software, you agree that you have read, " +
+        "understood, and will comply with the following terms and conditions:\n\n" +
+        "Permission to use, copy, modify, and distribute this software and its documentation for any purpose and without " +
+        "fee is hereby granted, provided that the above copyright notice appears in all copies, and that both that " +
+        "copyright notice and this permission notice appear in supporting documentation, and that the name of CMU not be " +
+        "used in advertising or publicity pertaining to distribution of the software without specific, written prior " +
+        "permission."),
+    LicenseEntry("BSD-2-Clause (Simplified)", "lz4",
+        "Redistribution and use in source and binary forms, with or without modification, are permitted provided that the " +
+        "following conditions are met:\n\n1. Redistributions of source code must retain the above copyright notice, this " +
+        "list of conditions and the following disclaimer.\n\n2. Redistributions in binary form must reproduce the above " +
+        "copyright notice, this list of conditions and the following disclaimer in the documentation and/or other " +
+        "materials provided with the distribution.\n\nTHIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS " +
+        "\"AS IS\" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF " +
+        "MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR " +
+        "CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES " +
+        "(INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR " +
+        "BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR " +
+        "TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF " +
+        "THE POSSIBILITY OF SUCH DAMAGE."),
+    LicenseEntry("GNU GPL-3.0", "rg-converters",
+        "PyPI package built and bundled from source as required by its GPL-3.0 license. The corresponding source is " +
+        "available at its PyPI page (https://pypi.org/project/rg-converters/); the Android-compatible wheel build scripts " +
+        "live in this repository's GitHub workflow."),
+    LicenseEntry("GNU GPL-2.0-or-later (ffmpeg components)", "ffmpeg · x264 · x265", 
+        "This app bundles prebuilt native libraries (libffmpeg_bin.so and friends) that link against GPL components " +
+        "(libx264, libx265). The corresponding source for these libraries is obtainable from their upstream projects " +
+        "(https://ffmpeg.org, https://x264.org, https://x265.org) and from the build instructions of the repository these " +
+        "binaries ship with."),
+    LicenseEntry("SIL Open Font License 1.1", "Inter", 
+        "Copyright (c) 2016-2020 The Inter Project Authors (https://github.com/rsms/inter)\n\n" +
+        "This Font Software is licensed under the SIL Open Font License, Version 1.1. This license is copied below, and " +
+        "is also available with a FAQ at https://scripts.sil.org/OFL\n\n" +
+        "This license allows the font to be used, studied, modified and redistributed freely, subject to the conditions " +
+        "that derivative fonts licensed under OFL carry the Reserved Font Name clause and are not sold by themselves. " +
+        "See the full text at https://openfontlicense.org."),
+)
+
+@Composable
+internal fun LicensesPage() {
+    Column(
+        Modifier.fillMaxSize().verticalScroll(rememberScrollState())
+            .padding(horizontal = 12.dp, vertical = 8.dp).padding(bottom = 96.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        for (entry in LICENSE_ENTRIES) {
+            Card(Modifier.fillMaxWidth(), insideMargin = PaddingValues(0.dp)) {
+                Column(Modifier.padding(horizontal = 16.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text(entry.title, style = MiuixTheme.textStyles.subtitle)
+                    Hint(entry.subtitle)
+                    Text(entry.body, style = MiuixTheme.textStyles.footnote1)
+                }
+            }
+        }
+    }
+}
+
+/** Dev-mode in-app explorer for the app's private data (/data/data/<pkg>/files). */
+@Composable
+internal fun DevFileExplorer(root: File, onOpenFile: (File) -> Unit) {
+    var cwd by remember { mutableStateOf(root) }
+    fun entryLabel(f: File): String = if (f.isDirectory) "folder" else {
+        val bytes = if (f.length() > 1024 * 1024) "> 1 MB" else "%.1f KB".format(f.length() / 1024.0)
+        bytes
+    }
+    Column(
+        Modifier.fillMaxSize().verticalScroll(rememberScrollState())
+            .padding(horizontal = 12.dp, vertical = 8.dp).padding(bottom = 96.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Card(Modifier.fillMaxWidth(), insideMargin = PaddingValues(0.dp)) {
+            Column(Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
+                Text("Private app data", style = MiuixTheme.textStyles.subtitle)
+                Hint(cwd.absolutePath)
+            }
+            val entries = cwd.listFiles()?.sortedWith(compareBy({ it.isFile }, { it.name.lowercase() }))
+            if (cwd != root) {
+                Row(Modifier.fillMaxWidth().clickable { cwd = cwd.parentFile }
+                    .padding(horizontal = 16.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Text("⬆  up one level", color = MiuixTheme.colorScheme.primary)
+                }
+            }
+            for (f in entries.orEmpty()) {
+                Row(Modifier.fillMaxWidth().clickable { if (f.isDirectory) cwd = f else onOpenFile(f) }
+                    .padding(horizontal = 16.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Column(Modifier.weight(1f)) {
+                        Text(f.name, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Hint(entryLabel(f))
+                    }
+                    if (f.isFile) Text("view", style = MiuixTheme.textStyles.footnote1,
+                        color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
+                }
+            }
+            if (entries.isNullOrEmpty()) {
+                HintCardPadded("(empty folder)")
+            }
+        }
     }
 }
