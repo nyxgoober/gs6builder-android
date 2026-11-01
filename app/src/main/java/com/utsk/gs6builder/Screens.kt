@@ -2,6 +2,8 @@ package com.utsk.gs6builder
 
 import android.os.Build
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
@@ -20,6 +22,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -46,6 +50,34 @@ internal val AUDIO = arrayOf("audio/*", "video/*", "application/ogg")
 internal val VIDEO = arrayOf("video/*")
 internal val ANY = arrayOf("*/*")
 internal typealias PickFile = (String, Array<String>, (String) -> Unit) -> Unit
+
+/**
+ * Fires [onHold] once the pointer has been held down on this spot for [millis] without lifting or
+ * dragging away. Watches in the Initial pass so it works on top of clickable children, and eats the
+ * rest of the gesture after firing so the release isn't also treated as a tap.
+ */
+internal fun Modifier.holdToTrigger(millis: Long = 10_000, onHold: () -> Unit): Modifier =
+    pointerInput(millis, onHold) {
+        awaitEachGesture {
+            val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+            val slop = viewConfiguration.touchSlop
+            val letGo = withTimeoutOrNull(millis) {
+                var holding = true
+                while (holding) {
+                    val change = awaitPointerEvent(PointerEventPass.Initial).changes.firstOrNull { it.id == down.id }
+                    holding = change != null && change.pressed && (change.position - down.position).getDistance() <= slop
+                }
+                true
+            }
+            if (letGo == null) {
+                onHold()
+                do {
+                    val event = awaitPointerEvent(PointerEventPass.Initial)
+                    event.changes.forEach { it.consume() }
+                } while (event.changes.any { it.pressed })
+            }
+        }
+    }
 
 // ---- shared building blocks ------------------------------------------------------------------
 
@@ -263,6 +295,8 @@ internal fun SettingsPage(
     s: AppSettings, onNewProject: () -> Unit,
     version: String, checkingUpdate: Boolean, onCheckUpdate: () -> Unit,
     onOpenLicenses: () -> Unit,
+    onPickOutputFolder: () -> Unit, onResetOutputFolder: () -> Unit,
+    onUnlockDev: () -> Unit, onOpenDevFiles: () -> Unit, onDisableDev: () -> Unit,
 ) {
     Section("Appearance") {
         OverlayDropdownPreference(
@@ -281,6 +315,11 @@ internal fun SettingsPage(
     Section("Project") {
         SwitchPreference(checked = s.autoCopyId, onCheckedChange = { s.autoCopyId = it },
             title = "Copy identifier after compiling", summary = "Puts the identifier on your clipboard when a compile succeeds")
+        ArrowPreference(title = "Output folder", summary = describeOutputFolder(s.outputDir) +
+            (if (s.outputDir.isBlank()) " (default)" else ""), onClick = onPickOutputFolder)
+        if (s.outputDir.isNotBlank()) {
+            ArrowPreference(title = "Reset output folder", summary = "Go back to Downloads/GS6Charts", onClick = onResetOutputFolder)
+        }
         ArrowPreference(title = "New project", summary = "Clear every field and start over", onClick = onNewProject)
     }
     Section("Updates") {
@@ -291,10 +330,17 @@ internal fun SettingsPage(
             title = "Update channel", onSelectedIndexChange = { s.updateChannel = it },
         )
         ArrowPreference(title = "Check for updates", summary = if (checkingUpdate) "Checking…" else "Current version $version",
+            modifier = Modifier.holdToTrigger(onHold = onUnlockDev),
             onClick = { if (!checkingUpdate) onCheckUpdate() })
     }
     Section("About") {
         ArrowPreference(title = "Open-source licenses", summary = "Libraries, fonts and bundled code this app uses", onClick = onOpenLicenses)
+    }
+    if (s.devMode) {
+        Section("Developer Mode") {
+            ArrowPreference(title = "Private app data", summary = "Browse the app's internal files", onClick = onOpenDevFiles)
+            ArrowPreference(title = "Disable developer mode", summary = "Hide this section again", onClick = onDisableDev)
+        }
     }
 }
 
@@ -372,10 +418,11 @@ internal val LICENSE_ENTRIES: List<LicenseEntry> = listOf(
 )
 
 @Composable
-internal fun LicensesPage() {
+internal fun LicensesPage(insets: PaddingValues) {
     Column(
         Modifier.fillMaxSize().verticalScroll(rememberScrollState())
-            .padding(horizontal = 12.dp, vertical = 8.dp).padding(bottom = 96.dp),
+            .padding(top = insets.calculateTopPadding(), bottom = insets.calculateBottomPadding())
+            .padding(horizontal = 12.dp, vertical = 8.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         for (entry in LICENSE_ENTRIES) {
@@ -392,7 +439,7 @@ internal fun LicensesPage() {
 
 /** Dev-mode in-app explorer for the app's private data (/data/data/<pkg>/files). */
 @Composable
-internal fun DevFileExplorer(root: File, onOpenFile: (File) -> Unit) {
+internal fun DevFileExplorer(root: File, insets: PaddingValues, onOpenFile: (File) -> Unit, onExportFile: (File) -> Unit) {
     var cwd by remember { mutableStateOf(root) }
     fun entryLabel(f: File): String = if (f.isDirectory) "folder" else {
         val bytes = if (f.length() > 1024 * 1024) "> 1 MB" else "%.1f KB".format(f.length() / 1024.0)
@@ -400,13 +447,15 @@ internal fun DevFileExplorer(root: File, onOpenFile: (File) -> Unit) {
     }
     Column(
         Modifier.fillMaxSize().verticalScroll(rememberScrollState())
-            .padding(horizontal = 12.dp, vertical = 8.dp).padding(bottom = 96.dp),
+            .padding(top = insets.calculateTopPadding(), bottom = insets.calculateBottomPadding())
+            .padding(horizontal = 12.dp, vertical = 8.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         Card(Modifier.fillMaxWidth(), insideMargin = PaddingValues(0.dp)) {
             Column(Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
                 Text("Private app data", style = MiuixTheme.textStyles.subtitle)
                 Hint(cwd.absolutePath)
+                Hint("Tap a file to view it (binary files open in a hex viewer). Hold a file to export it.")
             }
             val entries = cwd.listFiles()?.sortedWith(compareBy({ it.isFile }, { it.name.lowercase() }))
             if (cwd != root) {
@@ -416,7 +465,9 @@ internal fun DevFileExplorer(root: File, onOpenFile: (File) -> Unit) {
                 }
             }
             for (f in entries.orEmpty()) {
-                Row(Modifier.fillMaxWidth().clickable { if (f.isDirectory) cwd = f else onOpenFile(f) }
+                Row(Modifier.fillMaxWidth()
+                    .then(if (f.isFile) Modifier.holdToTrigger(millis = 700) { onExportFile(f) } else Modifier)
+                    .clickable { if (f.isDirectory) cwd = f else onOpenFile(f) }
                     .padding(horizontal = 16.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Column(Modifier.weight(1f)) {

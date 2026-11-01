@@ -24,6 +24,15 @@ private class IntSetting(private val sp: SharedPreferences, private val key: Str
     }
 }
 
+private class StringSetting(private val sp: SharedPreferences, private val key: String, default: String) {
+    private val state = mutableStateOf(sp.getString(key, default) ?: default)
+    operator fun getValue(thisRef: Any?, p: KProperty<*>): String = state.value
+    operator fun setValue(thisRef: Any?, p: KProperty<*>, v: String) {
+        state.value = v
+        sp.edit().putString(key, v).apply()
+    }
+}
+
 /** App preferences, persisted in SharedPreferences and observable from Compose. */
 class AppSettings(context: Context) {
     private val sp = context.getSharedPreferences("settings", Context.MODE_PRIVATE)
@@ -34,7 +43,10 @@ class AppSettings(context: Context) {
     var glassBar by BoolSetting(sp, "glass_bar", true)
     var autoCopyId by BoolSetting(sp, "auto_copy_id", true)
 
-    /** Unlocked by long-pressing the version row while it shows "Up to date". */
+    /** SAF tree URI of the folder compiled charts/zips are saved to; empty = Downloads/GS6Charts. */
+    var outputDir by StringSetting(sp, "output_dir", "")
+
+    /** Unlocked by holding the "Check for updates" row for ten seconds; shows the Developer Mode section in Settings. */
     var devMode by BoolSetting(sp, "dev_mode", false)
     var updateCheck by BoolSetting(sp, "update_check", true)
     /** 0 = Release (stable builds only), 1 = Preview (also alpha/beta/pre/rc builds). */

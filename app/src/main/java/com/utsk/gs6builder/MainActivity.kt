@@ -4,9 +4,11 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.ContentValues
 import android.content.Context
+import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
 import android.os.Environment
+import android.provider.DocumentsContract
 import android.provider.MediaStore
 import android.provider.OpenableColumns
 import androidx.activity.ComponentActivity
@@ -94,10 +96,65 @@ class Backend(private val ctx: Context) {
         return "Downloads/GS6Charts/${src.name}"
     }
 
+    /**
+     * Save a result to the folder the user picked in Settings ([treeUri], a SAF tree URI), or to
+     * Downloads/GS6Charts when none is set. If the picked folder can't be written any more
+     * (permission revoked, folder deleted, card removed) it falls back to Downloads and says so.
+     */
+    fun saveOutput(src: File, treeUri: String): String {
+        if (treeUri.isBlank()) return saveToDownloads(src)
+        return try {
+            saveToTree(src, Uri.parse(treeUri))
+        } catch (e: Exception) {
+            saveToDownloads(src) + " (couldn't write to ${describeOutputFolder(treeUri)}: ${e.message ?: e.javaClass.simpleName})"
+        }
+    }
+
+    private fun saveToTree(src: File, tree: Uri): String {
+        val parent = DocumentsContract.buildDocumentUriUsingTree(tree, DocumentsContract.getTreeDocumentId(tree))
+        val doc = DocumentsContract.createDocument(ctx.contentResolver, parent, "application/octet-stream", src.name)
+            ?: error("the folder refused the new file")
+        ctx.contentResolver.openOutputStream(doc)!!.use { o -> src.inputStream().use { it.copyTo(o) } }
+        return describeOutputFolder(tree.toString()) + "/" + src.name
+    }
+
+    private val treeFlags = Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+
+    /** Keep access to a freshly picked folder across restarts, and drop the previous one. */
+    fun grantTree(uri: Uri, previous: String) {
+        ctx.contentResolver.takePersistableUriPermission(uri, treeFlags)
+        if (previous.isNotBlank() && previous != uri.toString()) releaseTree(previous)
+    }
+
+    fun releaseTree(treeUri: String) {
+        runCatching { ctx.contentResolver.releasePersistableUriPermission(Uri.parse(treeUri), treeFlags) }
+    }
+
+    /** Copy a private file to a document the user picked (dev-mode export). */
+    fun exportTo(src: File, dst: Uri) {
+        ctx.contentResolver.openOutputStream(dst)!!.use { o -> src.inputStream().use { it.copyTo(o) } }
+    }
+
     fun copyText(text: String) {
         val cm = ctx.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
         cm.setPrimaryClip(ClipData.newPlainText("identifier", text))
     }
+}
+
+/** Human-readable form of the output folder setting ("" = the default Downloads/GS6Charts). */
+fun describeOutputFolder(treeUri: String): String {
+    if (treeUri.isBlank()) return "Downloads/GS6Charts"
+    return runCatching {
+        val id = DocumentsContract.getTreeDocumentId(Uri.parse(treeUri))   // e.g. "primary:Music/Charts"
+        val vol = id.substringBefore(':')
+        val path = id.substringAfter(':', "")
+        when {
+            ':' !in id -> id
+            vol == "primary" -> path.ifEmpty { "Internal storage" }
+            path.isEmpty() -> vol
+            else -> "$vol/$path"
+        }
+    }.getOrDefault("Custom folder")
 }
 
 class MainActivity : ComponentActivity() {

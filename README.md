@@ -33,7 +33,7 @@ License: AGPL-3.0
 - An **UntitledCharts** or **CC Archive** level link. The app downloads the level, fills in title, artist,
   charter, cover, song and chart, and cuts a preview from the song if the level does not ship one.
 
-**Output** (saved to `Downloads/GS6Charts/`)
+**Output** (saved to `Downloads/GS6Charts/` by default; pick another folder under Settings → Output folder)
 - **Build zip**: an editable project zip (`ChartInfo.json`, jacket, track, preview, charts, optional music
   videos and cover files).
 - **Compile**: opens a sheet with an *Also build project ZIP* toggle, then produces the game-ready `.chart.gs6` files. When a compile succeeds the identifier is copied
