@@ -24,6 +24,27 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
     packaging { jniLibs { useLegacyPackaging = true } }
+
+    signingConfigs {
+        create("release") {
+            // Populated from env vars in CI (see .github/workflows/build-app.yml).
+            // Locally, assembleRelease will just be unsigned unless these are set
+            // in your shell.
+            val ksPath = System.getenv("KEYSTORE_PATH")
+            if (ksPath != null) {
+                storeFile = file(ksPath)
+                storePassword = System.getenv("KEYSTORE_PASSWORD")
+                keyAlias = System.getenv("KEY_ALIAS")
+                keyPassword = System.getenv("KEY_PASSWORD")
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            signingConfig = signingConfigs.getByName("release")
+        }
+    }
 }
 
 kotlin {

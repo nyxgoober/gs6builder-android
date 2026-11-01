@@ -196,14 +196,38 @@ jobs:
         run: |
           yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-37" > /dev/null || true
 
-      - name: Build APK
-        run: gradle :app:assembleDebug --stacktrace
+      - name: Decode release keystore
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE }}
+        run: echo "$KEYSTORE_BASE64" | base64 -d > "${{ github.workspace }}/release.keystore"
+
+      - name: Build signed release APK
+        env:
+          KEYSTORE_PATH: ${{ github.workspace }}/release.keystore
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: gradle :app:assembleRelease --stacktrace
+
+      - name: Clean up keystore
+        if: always()
+        run: rm -f "${{ github.workspace }}/release.keystore"
+
+      - name: Locate signed APK
+        id: apk
+        run: |
+          APK_PATH=$(find app/build/outputs/apk/release -name "*.apk" | head -n1)
+          if [ -z "$APK_PATH" ]; then
+            echo "::error::no release APK found under app/build/outputs/apk/release"
+            exit 1
+          fi
+          echo "path=$APK_PATH" >> "$GITHUB_OUTPUT"
 
       - name: Prepare APK for Release
         if: github.event.inputs.release == 'true'
         run: |
           VERSION="${{ github.event.inputs.version }}"
-          cp app/build/outputs/apk/debug/*.apk "com.utsk.gs6builder-${VERSION}.apk"
+          cp "${{ steps.apk.outputs.path }}" "com.utsk.gs6builder-${VERSION}.apk"
 
       - name: Generate Build Attestation
         if: github.event.inputs.release == 'true'
@@ -215,7 +239,7 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: gs6builder-android
-          path: app/build/outputs/apk/debug/*.apk
+          path: ${{ steps.apk.outputs.path }}
           if-no-files-found: error
 
       - name: Create GitHub Release and Attach APK
