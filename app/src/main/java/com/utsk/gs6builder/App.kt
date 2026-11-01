@@ -40,6 +40,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -48,7 +49,6 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.paint
@@ -155,8 +155,6 @@ fun App(b: Backend, s: AppSettings, dark: Boolean) {
     val scope = rememberCoroutineScope()
     val density = LocalDensity.current
 
-    var page by remember { mutableIntStateOf(1) }       // 1 Files, 2 Metadata, 3 Settings
-    var barIndex by remember { mutableIntStateOf(1) }   // which tab the bar highlights (0 while the import sheet is open)
     var status by remember { mutableStateOf("Starting…") }
     var busy by remember { mutableStateOf(false) }
     var ready by remember { mutableStateOf(false) }
@@ -222,20 +220,9 @@ fun App(b: Backend, s: AppSettings, dark: Boolean) {
     val useGlass = s.glassBar && isRuntimeShaderSupported()
     // Hoisted out of the page content so it survives opening Licenses / the file browser.
     val pagerState = rememberPagerState(initialPage = 0, pageCount = { 3 })
-
-    // Tab bar -> pager. `page` is only read inside the flow, so switching tabs doesn't recompose the screen.
-    LaunchedEffect(pagerState) {
-        snapshotFlow { page }.collect { p ->
-            if (pagerState.targetPage != p - 1) pagerState.animateScrollToPage(p - 1)
-        }
-    }
-    // Pager (swipes) -> tab bar.
-    LaunchedEffect(pagerState) {
-        snapshotFlow { pagerState.settledPage }.collect { p ->
-            val np = p + 1
-            if (page != np) { page = np; barIndex = np }
-        }
-    }
+    // The pager is the single source of truth for the current page (0..2 = Files, Metadata, Settings).
+    // The bar just reflects it (0 = Import while its sheet is open), so the two can never disagree.
+    val barIndex by remember { derivedStateOf { if (showImport) 0 else pagerState.targetPage + 1 } }
 
     // ---- helpers -------------------------------------------------------------------------
     /** Everything required before a compile is meaningful, human-readable for the "why not" dialog. */
@@ -413,7 +400,7 @@ fun App(b: Backend, s: AppSettings, dark: Boolean) {
         exportLauncher.launch(f.name)
     }
 
-    fun closeImportSheet() { showImport = false; barIndex = page }
+    fun closeImportSheet() { showImport = false }
 
     fun doLinkImport() {
         val site = if (importKind == 0) "untitledcharts" else "ccarchive"
@@ -444,7 +431,12 @@ fun App(b: Backend, s: AppSettings, dark: Boolean) {
     }
 
     fun onTab(i: Int) {
-        if (i == 0) { showImport = true; barIndex = 0 } else { page = i; barIndex = i }
+        if (i == 0) {
+            showImport = true
+        } else if (pagerState.targetPage != i - 1) {
+            // Own job per tap: a newer tap or a swipe cancels the running scroll without touching anything else.
+            scope.launch { pagerState.animateScrollToPage(i - 1) }
+        }
     }
 
     // The pages are kept composed side by side, so give them callbacks whose identity never changes.
@@ -473,7 +465,7 @@ fun App(b: Backend, s: AppSettings, dark: Boolean) {
         SmallTopAppBar(title = when (subPage) {
             SubPage.Licenses -> "Open-source licenses"
             SubPage.DevFiles -> "Private app data"
-            null -> TAB_LABELS[page]
+            null -> TAB_LABELS[pagerState.targetPage + 1]
         })
     }) { pad ->
         BackHandler(enabled = subPage != null) { subPage = null }
