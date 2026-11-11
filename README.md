@@ -1,6 +1,7 @@
 # GS6 Chart Builder for Android
 > [!IMPORTANT]
 > This project is not maintained by YumYummity or prodeode. Suggestions, bugs or issues should be submitted to THIS repository instead of GridlessSekai6.
+
 > [!TIP]
 > You are on the `material` branch!
 > This branch contains active development into adding a new optional UI style. Switch to `main` for the stable app.
