@@ -1,6 +1,9 @@
 # GS6 Chart Builder for Android
 > [!IMPORTANT]
 > This project is not maintained by YumYummity or prodeode. Suggestions, bugs or issues should be submitted to THIS repository instead of GridlessSekai6.
+> [!TIP]
+> You are on the `material` branch!
+> This branch contains active development into adding a new optional UI style. Switch to `main` for the stable app.
 
 An Android port of the upstream desktop app for packaging custom charts for [GridlessSekai6](https://github.com/UnknownSekai/GridlessSekai6). You fill in the metadata and assets, them the app produces either a project `.zip` or a compiled
 `.chart.gs6` file the game loads. 
