@@ -24,6 +24,14 @@ on:
         required: true
         default: 'v1.0.0'
         type: string
+      bump_version_code:
+        description: 'Increment versionCode? (leave false for non-major/patch builds)'
+        required: true
+        default: 'false'
+        type: choice
+        options:
+          - 'true'
+          - 'false'
       note:
         description: 'Release notes'
         required: true
@@ -188,6 +196,36 @@ jobs:
 
       - name: Restrict architecture to arm64-v8a
         run: sed -i 's/listOf("arm64-v8a", "x86_64")/listOf("arm64-v8a")/' app/build.gradle.kts
+
+      - name: Set app version from workflow input
+        run: |
+          RAW_VERSION="${{ github.event.inputs.version }}"
+          # Strip a leading "v"/"V" and any trailing prerelease tag such as
+          # "-rc1", "-beta2", "-alpha", etc., so versionName is always plain
+          # dotted digits (e.g. "v1.2.0-rc1" -> "1.2.0").
+          VERSION_NAME=$(echo "$RAW_VERSION" | sed -E 's/^[vV]//; s/-[A-Za-z]+[0-9]*$//')
+
+          if [ -z "$VERSION_NAME" ]; then
+            echo "::error::computed versionName is empty (input was '$RAW_VERSION')"
+            exit 1
+          fi
+
+          echo "Resolved versionName: $VERSION_NAME (from input: $RAW_VERSION)"
+
+          sed -i -E "s/versionName = \"[^\"]*\"/versionName = \"${VERSION_NAME}\"/" app/build.gradle.kts
+
+          if [ "${{ github.event.inputs.bump_version_code }}" = "true" ]; then
+            echo "Bumping versionCode to run number ${{ github.run_number }}"
+            sed -i -E "s/versionCode = [0-9]+/versionCode = ${{ github.run_number }}/" app/build.gradle.kts
+          else
+            echo "Leaving versionCode unchanged (bump_version_code=false)"
+          fi
+
+          echo "--- defaultConfig block ---"
+          sed -n '/defaultConfig {/,/}/p' app/build.gradle.kts
+
+          grep -q "versionName = \"${VERSION_NAME}\"" app/build.gradle.kts \
+            || { echo "::error::failed to set versionName in app/build.gradle.kts"; exit 1; }
 
       - name: Accept Android SDK licenses
         run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null || true
