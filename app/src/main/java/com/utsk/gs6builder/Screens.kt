@@ -142,7 +142,7 @@ private fun Field(label: String, key: String, st: Store, hint: String? = null, n
     }
 }
 
-private fun JSONArray.without(i: Int): JSONArray {
+internal fun JSONArray.without(i: Int): JSONArray {
     val a = JSONArray()
     for (j in 0 until length()) if (j != i) a.put(get(j))
     return a
@@ -299,6 +299,10 @@ internal fun SettingsPage(
     onUnlockDev: () -> Unit, onOpenDevFiles: () -> Unit, onDisableDev: () -> Unit,
 ) {
     Section("Appearance") {
+        OverlayDropdownPreference(
+            items = listOf("Miuix", "Material"), selectedIndex = s.uiStyle,
+            title = "App style", onSelectedIndexChange = { s.uiStyle = it },
+        )
         OverlayDropdownPreference(
             items = listOf("Follow system", "Light", "Dark"), selectedIndex = s.themeMode,
             title = "Dark mode", onSelectedIndexChange = { s.themeMode = it },

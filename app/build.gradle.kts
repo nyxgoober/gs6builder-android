@@ -72,6 +72,8 @@ dependencies {
     implementation("top.yukonga.miuix.kmp:miuix-ui-android:$miuix")
     implementation("top.yukonga.miuix.kmp:miuix-preference-android:$miuix")
     implementation("top.yukonga.miuix.kmp:miuix-icons-android:$miuix")
+    // Material 3 for the separate "Material" UI mode (large top app bar, dynamic color).
+    implementation("org.jetbrains.compose.material3:material3:1.9.0")
     implementation("io.github.kyant0:backdrop:2.0.1")
     implementation("io.github.kyant0:shapes:1.2.1")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")

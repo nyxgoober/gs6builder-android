@@ -86,7 +86,9 @@ CC Archive imports.
 renamed in 1.25.x.
 ## UI
 
-The UI uses [Miuix](https://github.com/compose-miuix-ui/miuix) components in [Inter](https://rsms.me/inter/)
+There are two separate UI modes, picked under Settings > Appearance > App style (Miuix is the default). Both render the same `AppController` (project state, imports, compiles, update checks), so switching style keeps your work. The Miuix UI is `MiuixShell` in `App.kt` plus `Screens.kt`; the Material 3 UI is `MaterialShell.kt`, `MaterialPages.kt` and `MaterialKit.kt` (dynamic color, AMOLED dark, large collapsing top app bars). Neither mode uses the other's components.
+
+The Miuix UI uses [Miuix](https://github.com/compose-miuix-ui/miuix) components in [Inter](https://rsms.me/inter/)
 with four bottom tabs: Import (a sheet), Files, Metadata and Settings. Tabs switch pages with a simple
 horizontal slide. The tab bar is Kyant0's
 [AndroidLiquidGlass](https://github.com/Kyant0/AndroidLiquidGlass) `backdrop` library plus the

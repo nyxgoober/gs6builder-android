@@ -43,6 +43,11 @@ class AppSettings(context: Context) {
     /** 0 = Intern (default), 1 = Inter, 2 = System. */
     var fontChoice by IntSetting(sp, "font_choice", 0)
     var glassBar by BoolSetting(sp, "glass_bar", true)
+
+    /** 0 = Miuix (default), 1 = Material. The two UIs are separate; this only picks which one is shown. */
+    var uiStyle by IntSetting(sp, "ui_style", 0)
+    /** Material mode only: pure black surfaces in dark theme. */
+    var amoled by BoolSetting(sp, "amoled", false)
     var autoCopyId by BoolSetting(sp, "auto_copy_id", true)
 
     /** SAF tree URI of the folder compiled charts/zips are saved to; empty = Downloads/GS6Charts. */
