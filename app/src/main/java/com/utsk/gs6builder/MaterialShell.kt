@@ -160,8 +160,10 @@ internal fun MaterialShell(c: AppController, dark: Boolean) {
     // Every Material row/button below fires the controller's debounced tick, which the haptics setting gates.
     CompositionLocalProvider(LocalMHaptics provides { c.tick() }) {
     Box(Modifier.fillMaxSize().background(bg)) {
-        // Page content. It is also the backdrop the glass bar refracts.
-        Box(Modifier.fillMaxSize().layerBackdrop(backdrop)) {
+        // Page content. It is also the backdrop the glass bar refracts. The background must come AFTER
+        // layerBackdrop so it is recorded into the layer; otherwise the lens samples transparent pixels
+        // and the real tab labels show through underneath it (the "duplicate bar").
+        Box(Modifier.fillMaxSize().layerBackdrop(backdrop).background(bg)) {
             HorizontalPager(state = pagerState, modifier = Modifier.fillMaxSize(), beyondViewportPageCount = 2) { p ->
                 val scroll = when (p) { 0 -> filesScroll; 1 -> metaScroll; else -> settingsScroll }
                 MPage(TAB_LABELS[p + 1], scroll, with(density) { bottomPx.toDp() } + barInset) {
