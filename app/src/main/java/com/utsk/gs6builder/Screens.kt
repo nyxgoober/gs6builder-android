@@ -303,6 +303,10 @@ internal fun SettingsPage(
             items = listOf("Follow system", "Light", "Dark"), selectedIndex = s.themeMode,
             title = "Dark mode", onSelectedIndexChange = { s.themeMode = it },
         )
+        OverlayDropdownPreference(
+            items = listOf("Intern", "Inter", "System"), selectedIndex = s.fontChoice,
+            title = "Font", onSelectedIndexChange = { s.fontChoice = it },
+        )
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             SwitchPreference(checked = s.monet, onCheckedChange = { s.monet = it },
                 title = "Monet colors", summary = "Use your wallpaper colors")
@@ -412,6 +416,14 @@ internal val LICENSE_ENTRIES: List<LicenseEntry> = listOf(
         "Copyright (c) 2016-2020 The Inter Project Authors (https://github.com/rsms/inter)\n\n" +
         "This Font Software is licensed under the SIL Open Font License, Version 1.1. This license is copied below, and " +
         "is also available with a FAQ at https://scripts.sil.org/OFL\n\n" +
+        "This license allows the font to be used, studied, modified and redistributed freely, subject to the conditions " +
+        "that derivative fonts licensed under OFL carry the Reserved Font Name clause and are not sold by themselves. " +
+        "See the full text at https://openfontlicense.org."),
+    LicenseEntry("SIL Open Font License 1.1", "Intern",
+        "Copyright 2016 The Inter Project Authors (https://github.com/rsms/inter)\nCopyright 2026 Luke (https://github.com/bvvst/intern)\n\n" +
+        "Intern is a fully rounded, variable-weight derivative of Inter. This Font Software is licensed under the SIL " +
+        "Open Font License, Version 1.1. This license is copied below, and is also available with a FAQ at " +
+        "https://scripts.sil.org/OFL\n\n" +
         "This license allows the font to be used, studied, modified and redistributed freely, subject to the conditions " +
         "that derivative fonts licensed under OFL carry the Reserved Font Name clause and are not sold by themselves. " +
         "See the full text at https://openfontlicense.org."),

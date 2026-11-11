@@ -40,6 +40,8 @@ class AppSettings(context: Context) {
     /** 0 = follow system, 1 = light, 2 = dark. */
     var themeMode by IntSetting(sp, "theme_mode", 0)
     var monet by BoolSetting(sp, "monet", false)
+    /** 0 = Intern (default), 1 = Inter, 2 = System. */
+    var fontChoice by IntSetting(sp, "font_choice", 0)
     var glassBar by BoolSetting(sp, "glass_bar", true)
     var autoCopyId by BoolSetting(sp, "auto_copy_id", true)
 

@@ -131,21 +131,27 @@ fun Root(activity: ComponentActivity, b: Backend, s: AppSettings) {
         onDispose {}
     }
 
-    // Inter, applied to every Miuix text style.
-    val inter = remember { FontFamily(Font(R.font.inter_variable)) }
-    val interStyles = remember(inter) {
+    // App font, applied to every Miuix text style. 0 = Intern, 1 = Inter, 2 = System default.
+    val appFont = remember(s.fontChoice) {
+        when (s.fontChoice) {
+            1 -> FontFamily(Font(R.font.inter_variable))
+            2 -> FontFamily.Default
+            else -> FontFamily(Font(R.font.intern_variable))
+        }
+    }
+    val fontStyles = remember(appFont) {
         val d = defaultTextStyles()
         d.copy(
-            main = d.main.copy(fontFamily = inter), paragraph = d.paragraph.copy(fontFamily = inter),
-            body1 = d.body1.copy(fontFamily = inter), body2 = d.body2.copy(fontFamily = inter),
-            button = d.button.copy(fontFamily = inter), footnote1 = d.footnote1.copy(fontFamily = inter),
-            footnote2 = d.footnote2.copy(fontFamily = inter), headline1 = d.headline1.copy(fontFamily = inter),
-            headline2 = d.headline2.copy(fontFamily = inter), subtitle = d.subtitle.copy(fontFamily = inter),
-            title1 = d.title1.copy(fontFamily = inter), title2 = d.title2.copy(fontFamily = inter),
-            title3 = d.title3.copy(fontFamily = inter), title4 = d.title4.copy(fontFamily = inter),
+            main = d.main.copy(fontFamily = appFont), paragraph = d.paragraph.copy(fontFamily = appFont),
+            body1 = d.body1.copy(fontFamily = appFont), body2 = d.body2.copy(fontFamily = appFont),
+            button = d.button.copy(fontFamily = appFont), footnote1 = d.footnote1.copy(fontFamily = appFont),
+            footnote2 = d.footnote2.copy(fontFamily = appFont), headline1 = d.headline1.copy(fontFamily = appFont),
+            headline2 = d.headline2.copy(fontFamily = appFont), subtitle = d.subtitle.copy(fontFamily = appFont),
+            title1 = d.title1.copy(fontFamily = appFont), title2 = d.title2.copy(fontFamily = appFont),
+            title3 = d.title3.copy(fontFamily = appFont), title4 = d.title4.copy(fontFamily = appFont),
         )
     }
-    MiuixTheme(controller = controller, textStyles = interStyles) { App(b, s, dark) }
+    MiuixTheme(controller = controller, textStyles = fontStyles) { App(b, s, dark) }
 }
 
 
