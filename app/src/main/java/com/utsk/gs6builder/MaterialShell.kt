@@ -35,9 +35,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LargeTopAppBar
@@ -53,6 +51,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.TopAppBarScrollBehavior
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -84,6 +83,7 @@ import com.kyant.backdrop.isRuntimeShaderSupported
 import com.utsk.gs6builder.glass.LiquidBottomTab
 import com.utsk.gs6builder.glass.LiquidBottomTabs
 import top.yukonga.miuix.kmp.icon.MiuixIcons
+import top.yukonga.miuix.kmp.icon.extended.Back
 import top.yukonga.miuix.kmp.icon.extended.Edit
 import top.yukonga.miuix.kmp.icon.extended.Folder
 import top.yukonga.miuix.kmp.icon.extended.Import
@@ -129,7 +129,7 @@ private fun MLargeTitle(title: String, behavior: TopAppBarScrollBehavior, onBack
                 fontWeight = HEADING_WEIGHT, maxLines = 1, overflow = TextOverflow.Ellipsis,
             )
         },
-        navigationIcon = { if (onBack != null) IconButton(onClick = onBack) { Text("←", fontSize = 24.sp) } },
+        navigationIcon = { if (onBack != null) IconButton(onClick = onBack) { Icon(MiuixIcons.Back, contentDescription = "Back") } },
         expandedHeight = HEADING_BAR_HEIGHT,
         scrollBehavior = behavior,
         colors = TopAppBarDefaults.topAppBarColors(
@@ -158,6 +158,8 @@ internal fun MaterialShell(c: AppController, dark: Boolean) {
 
     BackHandler(enabled = subPage != null) { subPage = null }
 
+    // Every Material row/button below fires the controller's debounced tick, which the haptics setting gates.
+    CompositionLocalProvider(LocalMHaptics provides { c.tick() }) {
     Box(Modifier.fillMaxSize().background(bg)) {
         // Page content. It is also the backdrop the glass bar refracts.
         Box(Modifier.fillMaxSize().layerBackdrop(backdrop)) {
@@ -210,19 +212,21 @@ internal fun MaterialShell(c: AppController, dark: Boolean) {
         ) {
             Column(
                 Modifier.fillMaxWidth()
-                    .background(Brush.verticalGradient(0f to Color.Transparent, 0.3f to bg))
+                    // Pad before the background: nothing may be painted behind the system navigation
+                    // pill, or it reads as a second bar when the pill is picked up.
                     .padding(bottom = barInset)
+                    .background(Brush.verticalGradient(0f to Color.Transparent, 0.3f to bg))
                     .onSizeChanged { bottomPx = it.height },
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    FilledTonalButton(modifier = Modifier.weight(1f), enabled = ready && !busy, onClick = { buildZip() }) { Text("Build zip") }
+                    MButton(modifier = Modifier.weight(1f), enabled = ready && !busy, onClick = { buildZip() }) { Text("Build zip") }
                     val canCompile = ready && missingFields().isEmpty()
                     val compileClick = { onCompilePressed() }
                     if (canCompile) {
-                        Button(modifier = Modifier.weight(1f), enabled = !busy, onClick = compileClick) { Text("Compile") }
+                        MButton(modifier = Modifier.weight(1f), primary = true, enabled = !busy, onClick = compileClick) { Text("Compile") }
                     } else {
-                        FilledTonalButton(modifier = Modifier.weight(1f), enabled = !busy, onClick = compileClick) { Text("Compile") }
+                        MButton(modifier = Modifier.weight(1f), enabled = !busy, onClick = compileClick) { Text("Compile") }
                     }
                 }
                 if (useGlass) {
@@ -273,12 +277,11 @@ internal fun MaterialShell(c: AppController, dark: Boolean) {
                     } else {
                         MHint("Pick a project .zip exported by this app or the desktop builder.")
                     }
-                    Button(
-                        modifier = Modifier.fillMaxWidth(),
+                    MButton(
+                        modifier = Modifier.fillMaxWidth(), primary = true,
                         enabled = ready && !busy && (importKind == 2 || url.isNotBlank()),
                         onClick = { requestImport() },
-                    ) { Text(if (importKind == 2) "Choose .zip…" else "Import") }
-                }
+                    ) { Text(if (importKind == 2) "Choose .zip…" else "Import") }                }
             }
         }
 
@@ -289,7 +292,7 @@ internal fun MaterialShell(c: AppController, dark: Boolean) {
                     Surface(shape = RoundedCornerShape(20.dp), color = MaterialTheme.colorScheme.surfaceContainer, modifier = Modifier.fillMaxWidth()) {
                         MSwitchRow("Also build project ZIP", null, compileZip) { compileZip = it }
                     }
-                    Button(modifier = Modifier.fillMaxWidth(), onClick = { closeCompileSheet(); compile(compileZip) }) { Text("Compile") }
+                    MButton(modifier = Modifier.fillMaxWidth(), primary = true, onClick = { closeCompileSheet(); compile(compileZip) }) { Text("Compile") }
                 }
             }
         }
@@ -342,6 +345,7 @@ internal fun MaterialShell(c: AppController, dark: Boolean) {
         MInfoDialog(show = devFileText != null, title = devFileText?.first, body = devFileText?.second ?: "", onDismiss = { devFileText = null })
         MInfoDialog(show = message != null, title = null, body = message ?: "", onDismiss = { message = null })
         MInfoDialog(show = errors != null, title = "Cannot build", body = errors?.joinToString("\n") { "• $it" } ?: "", onDismiss = { errors = null })
+    }
     }
   }
 }

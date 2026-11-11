@@ -97,6 +97,23 @@ internal class AppController(
     internal var createDocument: (String) -> Unit = {}
     private var pendingPick: ((Uri) -> Unit)? = null
 
+    /** Short tick for taps, switches and tab changes; silenced by the haptics setting.
+     *  Debounced, because a tap reaches [onTab] both directly and through the glass bar's
+     *  selector-arrival callback. */
+    private var lastTickAt = 0L
+    fun tick() {
+        val now = android.os.SystemClock.uptimeMillis()
+        if (s.haptics && now - lastTickAt > 80) {
+            lastTickAt = now
+            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+        }
+    }
+
+    /** Stronger pulse for long-press actions; silenced by the haptics setting. */
+    fun longPress() {
+        if (s.haptics) haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+    }
+
     fun checkForUpdate(manual: Boolean) {
         if (checkingUpdate) return
         checkingUpdate = true
@@ -307,7 +324,7 @@ internal class AppController(
 
     // ---- dev mode ----------------------------------------------------------------------------
     fun unlockDevTab() {
-        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+        longPress()
         message = if (s.devMode) "Developer mode is already on." else "Developer mode enabled. Look for it at the bottom of Settings."
         s.devMode = true
     }
@@ -327,7 +344,7 @@ internal class AppController(
 
     /** Hold a file in the explorer: pick somewhere to write a copy of it. */
     fun exportDevFile(f: File) {
-        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+        longPress()
         pendingExport = f
         createDocument(f.name)
     }
@@ -335,9 +352,10 @@ internal class AppController(
     // ---- navigation --------------------------------------------------------------------------
     fun onTab(i: Int) {
         if (i == 0) {
-            showImport = true
+            if (!showImport) { tick(); showImport = true }
         } else if (pagerState.targetPage != i - 1) {
             // Own job per tap: a newer tap or a swipe cancels the running scroll without touching anything else.
+            tick()
             scope.launch { pagerState.animateScrollToPage(i - 1) }
         }
     }

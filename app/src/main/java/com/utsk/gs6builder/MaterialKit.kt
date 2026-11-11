@@ -1,20 +1,30 @@
 package com.utsk.gs6builder
 
 import android.os.Build
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsHoveredAsState
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.SegmentedButton
@@ -30,19 +40,30 @@ import androidx.compose.material3.dynamicDarkColorScheme
 import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.materialkolor.PaletteStyle
+import com.materialkolor.dynamicColorScheme
+import top.yukonga.miuix.kmp.icon.MiuixIcons
+import top.yukonga.miuix.kmp.icon.extended.ChevronForward
+import top.yukonga.miuix.kmp.icon.extended.Clear
+import top.yukonga.miuix.kmp.icon.extended.ExpandMore
+import top.yukonga.miuix.kmp.icon.extended.Ok
 import java.io.File
 
 // ---- theme -------------------------------------------------------------------------------------
@@ -68,12 +89,70 @@ internal fun MaterialAppTheme(s: AppSettings, dark: Boolean, font: FontFamily, c
     val base = when {
         dynamic && dark -> dynamicDarkColorScheme(ctx)
         dynamic -> dynamicLightColorScheme(ctx)
+        // A seed picked in Settings: generate the whole Material scheme from it (AMOLED handled below).
+        s.seedColor != 0 -> dynamicColorScheme(
+            seedColor = Color(s.seedColor), isDark = dark,
+            isAmoled = dark && s.amoled, style = PaletteStyle.TonalSpot,
+        )
         dark -> darkColorScheme()
         else -> lightColorScheme()
     }
-    val scheme = if (dark && s.amoled) base.copy(background = Color.Black, surface = Color.Black) else base
+    val scheme = if (s.seedColor == 0 && dark && s.amoled)
+        base.copy(background = Color.Black, surface = Color.Black) else base
     val typography = remember(font) { Typography().withFont(font) }
     MaterialTheme(colorScheme = scheme, typography = typography, content = content)
+}
+
+// ---- haptics --------------------------------------------------------------------------------------
+
+/** Fired by every Material row, button, switch and dropdown; backed by the controller's debounced tick,
+ *  which the haptics setting gates. The Miuix UI uses its own widgets' feedback instead. */
+internal val LocalMHaptics = staticCompositionLocalOf { {} }
+
+// ---- expressive buttons ---------------------------------------------------------------------------
+// Material 3 "expressive" feel: the corner radius collapses while you press (or hover with a mouse).
+
+private const val BUTTON_RADIUS_REST = 26
+private const val BUTTON_RADIUS_PRESSED = 6
+
+/** Interaction source + corner radius animated from rest to pressed; share it between the button's
+ *  [shape] and [interactionSource] so the press is what drives the animation. */
+@Composable
+internal fun rememberExpressiveShape(source: MutableInteractionSource): Shape {
+    val pressed by source.collectIsPressedAsState()
+    val hovered by source.collectIsHoveredAsState()
+    val radius by animateDpAsState(
+        targetValue = if (pressed || hovered) BUTTON_RADIUS_PRESSED.dp else BUTTON_RADIUS_REST.dp,
+        animationSpec = spring(dampingRatio = 1f, stiffness = 900f),
+        label = "buttonRadius",
+    )
+    return RoundedCornerShape(radius)
+}
+
+/** A Material button with the expressive corner-radius press. [primary] = filled, otherwise tonal. */
+@Composable
+internal fun MButton(
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    primary: Boolean = false,
+    enabled: Boolean = true,
+    content: @Composable RowScope.() -> Unit,
+) {
+    val haptic = LocalMHaptics.current
+    val source = remember { MutableInteractionSource() }
+    val shape = rememberExpressiveShape(source)
+    val click = { haptic(); onClick() }
+    if (primary) {
+        Button(
+            onClick = click, modifier = modifier, enabled = enabled, shape = shape,
+            interactionSource = source, colors = ButtonDefaults.buttonColors(), content = content,
+        )
+    } else {
+        FilledTonalButton(
+            onClick = click, modifier = modifier, enabled = enabled, shape = shape,
+            interactionSource = source, content = content,
+        )
+    }
 }
 
 // ---- grouped sections ----------------------------------------------------------------------------
@@ -134,8 +213,9 @@ private fun RowTexts(title: String, summary: String?, modifier: Modifier) {
 
 @Composable
 internal fun MSwitchRow(title: String, summary: String? = null, checked: Boolean, onChange: (Boolean) -> Unit) {
+    val haptic = LocalMHaptics.current
     Row(
-        Modifier.fillMaxWidth().clickable { onChange(!checked) }.padding(horizontal = 16.dp, vertical = 12.dp),
+        Modifier.fillMaxWidth().clickable { haptic(); onChange(!checked) }.padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         RowTexts(title, summary, Modifier.weight(1f))
@@ -143,31 +223,51 @@ internal fun MSwitchRow(title: String, summary: String? = null, checked: Boolean
     }
 }
 
+/** A settings row with an optional leading icon and the Material chevron at the end. */
 @Composable
-internal fun MArrowRow(title: String, summary: String? = null, modifier: Modifier = Modifier, onClick: () -> Unit) {
+internal fun MArrowRow(
+    title: String, summary: String? = null, modifier: Modifier = Modifier,
+    icon: ImageVector? = null, onClick: () -> Unit,
+) {
+    val haptic = LocalMHaptics.current
     Row(
-        modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 16.dp, vertical = 12.dp),
+        modifier.fillMaxWidth().clickable { haptic(); onClick() }.padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp),
     ) {
+        if (icon != null) {
+            Icon(icon, contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(22.dp))
+        }
         RowTexts(title, summary, Modifier.weight(1f))
-        Text("›", style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Icon(MiuixIcons.ChevronForward, contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(20.dp))
     }
 }
 
 @Composable
 internal fun MDropdownRow(title: String, options: List<String>, selected: Int, onSelect: (Int) -> Unit) {
+    val haptic = LocalMHaptics.current
     var open by remember { mutableStateOf(false) }
     Box {
         Row(
-            Modifier.fillMaxWidth().clickable { open = true }.padding(horizontal = 16.dp, vertical = 12.dp),
+            Modifier.fillMaxWidth().clickable { haptic(); open = true }.padding(horizontal = 16.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             RowTexts(title, options.getOrElse(selected) { "" }, Modifier.weight(1f))
-            Text("▾", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Icon(MiuixIcons.ExpandMore, contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(20.dp))
         }
         DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
             options.forEachIndexed { i, o ->
-                DropdownMenuItem(text = { Text(o) }, onClick = { open = false; onSelect(i) })
+                DropdownMenuItem(
+                    text = { Text(o) },
+                    leadingIcon = {
+                        // Only the selected entry carries a check mark.
+                        if (i == selected) Icon(MiuixIcons.Ok, contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
+                    },
+                    onClick = { haptic(); open = false; onSelect(i) },
+                )
             }
         }
     }
@@ -181,10 +281,12 @@ internal fun MChoice(title: String, value: String, options: List<String>, onSele
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun MSegmented(options: List<String>, selected: Int, onSelect: (Int) -> Unit) {
+    val haptic = LocalMHaptics.current
     SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
         options.forEachIndexed { i, label ->
             SegmentedButton(
-                selected = selected == i, onClick = { onSelect(i) },
+                selected = selected == i,
+                onClick = { haptic(); onSelect(i) },
                 shape = SegmentedButtonDefaults.itemShape(index = i, count = options.size),
             ) { Text(label, maxLines = 1) }
         }
@@ -195,6 +297,7 @@ internal fun MSegmented(options: List<String>, selected: Int, onSelect: (Int) ->
 
 @Composable
 internal fun MFileRow(label: String, path: String, onPick: () -> Unit, onClear: (() -> Unit)? = null) {
+    val haptic = LocalMHaptics.current
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         Column(Modifier.weight(1f)) {
             if (label.isNotEmpty()) MHint(label)
@@ -203,8 +306,12 @@ internal fun MFileRow(label: String, path: String, onPick: () -> Unit, onClear: 
                 maxLines = 1, overflow = TextOverflow.Ellipsis,
             )
         }
-        FilledTonalButton(onClick = onPick) { Text("Choose") }
-        if (onClear != null) TextButton(onClick = onClear) { Text("✕") }
+        MButton(onClick = onPick) { Text("Choose") }
+        if (onClear != null) {
+            TextButton(onClick = { haptic(); onClear() }) {
+                Icon(MiuixIcons.Clear, contentDescription = "Clear", modifier = Modifier.size(18.dp))
+            }
+        }
     }
 }
 

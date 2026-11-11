@@ -319,6 +319,8 @@ internal fun SettingsPage(
             SwitchPreference(checked = s.glassBar, onCheckedChange = { s.glassBar = it },
                 title = "Liquid glass tab bar", summary = "Turn off for the plain Miuix bar")
         }
+        SwitchPreference(checked = s.haptics, onCheckedChange = { s.haptics = it },
+            title = "Haptics", summary = "Vibrate on taps, switches and tab changes")
     }
     Section("Project") {
         SwitchPreference(checked = s.autoCopyId, onCheckedChange = { s.autoCopyId = it },

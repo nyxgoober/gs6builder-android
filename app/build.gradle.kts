@@ -74,6 +74,8 @@ dependencies {
     implementation("top.yukonga.miuix.kmp:miuix-icons-android:$miuix")
     // Material 3 for the separate "Material" UI mode (large top app bar, dynamic color).
     implementation("org.jetbrains.compose.material3:material3:1.9.0")
+    // Generates a full M3 ColorScheme from an arbitrary seed color (the in-app theme color picker).
+    implementation("com.materialkolor:material-kolor:5.0.1")
     implementation("io.github.kyant0:backdrop:2.0.1")
     implementation("io.github.kyant0:shapes:1.2.1")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")

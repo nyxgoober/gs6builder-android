@@ -1,15 +1,23 @@
 package com.utsk.gs6builder
 
 import android.os.Build
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -20,10 +28,19 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.kyant.backdrop.isRuntimeShaderSupported
+import top.yukonga.miuix.kmp.icon.MiuixIcons
+import top.yukonga.miuix.kmp.icon.extended.Add
+import top.yukonga.miuix.kmp.icon.extended.ExpandLess
+import top.yukonga.miuix.kmp.icon.extended.Folder
+import top.yukonga.miuix.kmp.icon.extended.Info
+import top.yukonga.miuix.kmp.icon.extended.Ok
+import top.yukonga.miuix.kmp.icon.extended.Refresh
 import org.json.JSONObject
 import java.io.File
 
@@ -59,7 +76,7 @@ internal fun MFilesPage(st: Store, pickFile: PickFile, check: (JSONObject, Boole
         }
         if (mvs.length() < 2) row {
             MPad {
-                FilledTonalButton(modifier = Modifier.fillMaxWidth(), onClick = {
+                MButton(modifier = Modifier.fillMaxWidth(), onClick = {
                     mvs.put(JSONObject().put("kind", MV_TYPES[mvs.length() % 2]).put("path", "")); st.touch()
                 }) { Text("+ Add music video") }
             }
@@ -90,7 +107,7 @@ internal fun MFilesPage(st: Store, pickFile: PickFile, check: (JSONObject, Boole
         }
         if (rows.length() < 6) row {
             MPad {
-                FilledTonalButton(modifier = Modifier.fillMaxWidth(), onClick = {
+                MButton(modifier = Modifier.fillMaxWidth(), onClick = {
                     val used = (0 until rows.length()).map { rows.getJSONObject(it).getString("difficulty") }.toSet()
                     rows.put(JSONObject().put("difficulty", DIFFICULTIES.firstOrNull { it !in used } ?: "master")
                         .put("level", "1").put("path", "").put("lenient", false)); st.touch()
@@ -132,7 +149,7 @@ internal fun MFilesPage(st: Store, pickFile: PickFile, check: (JSONObject, Boole
         }
         row {
             MPad {
-                FilledTonalButton(modifier = Modifier.fillMaxWidth(), onClick = {
+                MButton(modifier = Modifier.fillMaxWidth(), onClick = {
                     alts.put(JSONObject().put("name", "").put("vocals", "").put("vocal_type", "original_song")
                         .put("audio", "").put("preview", "").put("jacket", "")); st.touch()
                 }) { Text("+ Add alt vocal") }
@@ -172,8 +189,8 @@ internal fun MMetadataPage(st: Store, onRegen: () -> Unit, onCopy: () -> Unit) {
                     "Keep it after your first export. You may paste your own: two valid v4 UUIDs joined by '_'.")
                 MTextField(st.str("identifier"), { st.set("identifier", it) })
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    FilledTonalButton(modifier = Modifier.weight(1f), onClick = onRegen) { Text("Regenerate") }
-                    FilledTonalButton(modifier = Modifier.weight(1f), onClick = onCopy) { Text("Copy") }
+                    MButton(modifier = Modifier.weight(1f), onClick = onRegen) { Text("Regenerate") }
+                    MButton(modifier = Modifier.weight(1f), onClick = onCopy) { Text("Copy") }
                 }
             }
         }
@@ -203,16 +220,18 @@ internal fun MSettingsPage(
             row { MSwitchRow("Dynamic color", "Use colors from your wallpaper", s.monet) { s.monet = it } }
         }
         row { MSwitchRow("AMOLED dark", "Pure black background in the dark theme", s.amoled) { s.amoled = it } }
+        row { MSeedSwatchRow(s) }
         row { MDropdownRow("Font", listOf("Intern", "Inter", "System"), s.fontChoice) { s.fontChoice = it } }
         if (glassSupported) {
             row { MSwitchRow("Liquid glass tab bar", "Turn off for the plain Material bar", s.glassBar) { s.glassBar = it } }
         }
+        row { MSwitchRow("Haptics", "Vibrate on taps, switches and tab changes", s.haptics) { s.haptics = it } }
     }
     MSection("Project") {
         row { MSwitchRow("Copy identifier after compiling", "Puts the identifier on your clipboard when a compile succeeds", s.autoCopyId) { s.autoCopyId = it } }
         row {
             MArrowRow("Output folder", describeOutputFolder(s.outputDir) + (if (s.outputDir.isBlank()) " (default)" else ""),
-                onClick = onPickOutputFolder)
+                icon = MiuixIcons.Folder, onClick = onPickOutputFolder)
         }
         if (s.outputDir.isNotBlank()) {
             row { MArrowRow("Reset output folder", "Go back to Downloads/GS6Charts", onClick = onResetOutputFolder) }
@@ -227,18 +246,110 @@ internal fun MSettingsPage(
         row {
             MArrowRow("Check for updates", if (checkingUpdate) "Checking…" else "Current version $version",
                 modifier = Modifier.holdToTrigger(onHold = onUnlockDev),
+                icon = MiuixIcons.Refresh,
                 onClick = { if (!checkingUpdate) onCheckUpdate() })
         }
     }
     MSection("About") {
-        row { MArrowRow("Open-source licenses", "Libraries, fonts and bundled code this app uses", onClick = onOpenLicenses) }
+        row { MArrowRow("Open-source licenses", "Libraries, fonts and bundled code this app uses", icon = MiuixIcons.Info, onClick = onOpenLicenses) }
     }
     if (s.devMode) {
         MSection("Developer Mode") {
-            row { MArrowRow("Private app data", "Browse the app's internal files", onClick = onOpenDevFiles) }
+            row { MArrowRow("Private app data", "Browse the app's internal files", icon = MiuixIcons.Folder, onClick = onOpenDevFiles) }
             row { MArrowRow("Disable developer mode", "Hide this section again", onClick = onDisableDev) }
         }
     }
+}
+
+// ---- Material theme colors ------------------------------------------------------------------------
+
+/** Preset seed colors for the Material scheme; the first entry restores the default scheme. */
+private val SEED_PRESETS = listOf(
+    0 to "Default",
+    0xFF9C27B0.toInt() to "Purple",
+    0xFFE91E63.toInt() to "Pink",
+    0xFFF44336.toInt() to "Red",
+    0xFFFF9800.toInt() to "Orange",
+    0xFF4CAF50.toInt() to "Green",
+    0xFF009688.toInt() to "Teal",
+    0xFF2196F3.toInt() to "Blue",
+    0xFF3F51B5.toInt() to "Indigo",
+    0xFF607D8B.toInt() to "Slate",
+)
+
+/** Editable Material colors: a row of seed swatches (plus a custom hex picker) that regenerates the
+ *  whole scheme live. Wallpaper colors (Dynamic color) take precedence while enabled. */
+@Composable
+private fun MSeedSwatchRow(s: AppSettings) {
+    val haptic = LocalMHaptics.current
+    var customOpen by remember { mutableStateOf(false) }
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text("Theme color", style = MaterialTheme.typography.bodyLarge)
+        if (s.monet && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            MHint("Dynamic color is on, so your wallpaper colors are used instead.")
+        }
+        Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            SEED_PRESETS.forEach { (argb, label) ->
+                val selected = s.seedColor == argb
+                Box(
+                    Modifier
+                        .size(36.dp)
+                        .clip(CircleShape)
+                        .then(
+                            if (argb == 0) Modifier.background(MaterialTheme.colorScheme.surfaceContainerHigh)
+                            else Modifier.background(Color(argb))
+                        )
+                        .clickable { haptic(); s.seedColor = argb },
+                    contentAlignment = Alignment.Center,
+                ) {
+                    if (selected) Icon(MiuixIcons.Ok, contentDescription = label,
+                        tint = if (argb == 0) MaterialTheme.colorScheme.onSurface else Color.White)
+                }
+            }
+            Box(
+                Modifier
+                    .size(36.dp)
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+                    .clickable { haptic(); customOpen = true },
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(MiuixIcons.Add, contentDescription = "Custom color",
+                    tint = MaterialTheme.colorScheme.onSurface)
+            }
+        }
+    }
+    if (customOpen) {
+        MCustomSeedDialog(
+            initial = s.seedColor,
+            onDismiss = { customOpen = false },
+            onPick = { argb -> s.seedColor = argb; customOpen = false },
+        )
+    }
+}
+
+@Composable
+private fun MCustomSeedDialog(initial: Int, onDismiss: () -> Unit, onPick: (Int) -> Unit) {
+    var text by remember { mutableStateOf(if (initial == 0) "" else "#%06X".format(initial and 0xFFFFFF)) }
+    val parsed = text.removePrefix("#").let {
+        if (it.length == 6) it.toLongOrNull(16)?.toInt()?.or(0xFF000000.toInt()) else null
+    }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Custom color") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                OutlinedTextField(value = text, onValueChange = { text = it }, label = { Text("Hex (e.g. 546E7A)") }, singleLine = true)
+                if (parsed != null) {
+                    Box(
+                        Modifier.size(48.dp).clip(CircleShape).background(Color(parsed)).align(Alignment.CenterHorizontally)
+                    ) {}
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = { if (parsed != null) onPick(parsed) }, enabled = parsed != null) { Text("Use") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+    )
 }
 
 // ---- Licenses + dev file explorer ------------------------------------------------------------
@@ -272,8 +383,11 @@ internal fun MDevFileExplorer(root: File, onOpenFile: (File) -> Unit, onExportFi
             val entries = cwd.listFiles()?.sortedWith(compareBy({ it.isFile }, { it.name.lowercase() }))
             if (cwd != root) {
                 Row(Modifier.fillMaxWidth().clickable { cwd = cwd.parentFile ?: root }
-                    .padding(horizontal = 20.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Text("⬆  up one level", color = MaterialTheme.colorScheme.primary)
+                    .padding(horizontal = 20.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Icon(MiuixIcons.ExpandLess, contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
+                    Text("Up one level", color = MaterialTheme.colorScheme.primary)
                 }
             }
             for (f in entries.orEmpty()) {
