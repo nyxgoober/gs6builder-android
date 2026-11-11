@@ -1,8 +1,11 @@
 package com.utsk.gs6builder
 
 import android.os.Build
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.spring
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsHoveredAsState
@@ -13,11 +16,14 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.DropdownMenu
@@ -41,6 +47,7 @@ import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -50,6 +57,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
@@ -57,6 +65,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import com.materialkolor.PaletteStyle
 import com.materialkolor.dynamicColorScheme
 import top.yukonga.miuix.kmp.icon.MiuixIcons
@@ -123,7 +133,9 @@ internal fun rememberExpressiveShape(source: MutableInteractionSource): Shape {
     val hovered by source.collectIsHoveredAsState()
     val radius by animateDpAsState(
         targetValue = if (pressed || hovered) BUTTON_RADIUS_PRESSED.dp else BUTTON_RADIUS_REST.dp,
-        animationSpec = spring(dampingRatio = 1f, stiffness = 900f),
+        // Springs from wherever it currently is, so an abrupt press-cancel (dialog stealing input)
+        // glides back instead of snapping; slow enough to read even when something opens over it.
+        animationSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = 550f),
         label = "buttonRadius",
     )
     return RoundedCornerShape(radius)
@@ -152,6 +164,77 @@ internal fun MButton(
             onClick = click, modifier = modifier, enabled = enabled, shape = shape,
             interactionSource = source, content = content,
         )
+    }
+}
+
+// ---- animated dialogs -----------------------------------------------------------------------------
+// The stock M3 AlertDialog pops in with no transition, which cuts short whatever button animation
+// opened it. This replacement fades the scrim and grows the pane (scale + expanding corner radius)
+// with a spring, so the press keeps flowing into the reveal.
+
+@Composable
+internal fun MDialog(
+    show: Boolean,
+    title: String? = null,
+    text: @Composable ColumnScope.() -> Unit = {},
+    confirmText: String? = null,
+    onConfirm: (() -> Unit)? = null,
+    confirmEnabled: Boolean = true,
+    dismissText: String? = null,
+    onDismiss: (() -> Unit)? = null,
+    cancellable: Boolean = true,
+) {
+    if (!show) return
+    Dialog(onDismissRequest = { if (cancellable) onDismiss?.invoke() }, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+        // Composed at show=true, so the entrance is animated from 0 every time.
+        val appear = remember { Animatable(0f) }
+        LaunchedEffect(Unit) {
+            appear.animateTo(1f, spring(dampingRatio = 0.86f, stiffness = 500f))
+        }
+        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            Box(
+                Modifier.fillMaxSize()
+                    .graphicsLayer { alpha = appear.value }
+                    .background(Color.Black.copy(alpha = 0.4f))
+                    .clickable(
+                        interactionSource = null, indication = null,
+                    ) { if (cancellable) onDismiss?.invoke() },
+            )
+            val haptic = LocalMHaptics.current
+            Surface(
+                shape = RoundedCornerShape(8.dp + 20.dp * appear.value),
+                color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                tonalElevation = 6.dp,
+                modifier = Modifier
+                    .padding(24.dp)
+                    .graphicsLayer {
+                        val v = appear.value
+                        scaleX = 0.88f + 0.12f * v
+                        scaleY = 0.88f + 0.12f * v
+                        alpha = (v * 4f).coerceAtMost(1f)   // visible almost immediately, opaque by a quarter in
+                    },
+            ) {
+                Column(Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                    if (title != null) {
+                        Text(title, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+                    }
+                    Column(Modifier.verticalScroll(rememberScrollState()), content = text)
+                    if (confirmText != null || dismissText != null) {
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                            if (dismissText != null) {
+                                TextButton(onClick = { haptic(); onDismiss?.invoke() }, modifier = Modifier.weight(1f)) { Text(dismissText) }
+                            }
+                            if (confirmText != null) {
+                                TextButton(
+                                    onClick = { haptic(); onConfirm?.invoke() },
+                                    enabled = confirmEnabled, modifier = Modifier.weight(1f),
+                                ) { Text(confirmText) }
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -212,12 +295,19 @@ private fun RowTexts(title: String, summary: String?, modifier: Modifier) {
 }
 
 @Composable
-internal fun MSwitchRow(title: String, summary: String? = null, checked: Boolean, onChange: (Boolean) -> Unit) {
+internal fun MSwitchRow(
+    title: String, summary: String? = null, checked: Boolean,
+    icon: ImageVector? = null, onChange: (Boolean) -> Unit,
+) {
     val haptic = LocalMHaptics.current
     Row(
         Modifier.fillMaxWidth().clickable { haptic(); onChange(!checked) }.padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp),
     ) {
+        if (icon != null) {
+            Icon(icon, contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(22.dp))
+        }
         RowTexts(title, summary, Modifier.weight(1f))
         Switch(checked = checked, onCheckedChange = null)
     }
@@ -245,7 +335,10 @@ internal fun MArrowRow(
 }
 
 @Composable
-internal fun MDropdownRow(title: String, options: List<String>, selected: Int, onSelect: (Int) -> Unit) {
+internal fun MDropdownRow(
+    title: String, options: List<String>, selected: Int,
+    icon: ImageVector? = null, onSelect: (Int) -> Unit,
+) {
     val haptic = LocalMHaptics.current
     var open by remember { mutableStateOf(false) }
     Box {
@@ -253,6 +346,10 @@ internal fun MDropdownRow(title: String, options: List<String>, selected: Int, o
             Modifier.fillMaxWidth().clickable { haptic(); open = true }.padding(horizontal = 16.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp),
         ) {
+            if (icon != null) {
+                Icon(icon, contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(22.dp))
+            }
             RowTexts(title, options.getOrElse(selected) { "" }, Modifier.weight(1f))
             Icon(MiuixIcons.ExpandMore, contentDescription = null,
                 tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(20.dp))

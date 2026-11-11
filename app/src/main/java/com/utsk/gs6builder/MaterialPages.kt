@@ -1,6 +1,11 @@
 package com.utsk.gs6builder
 
 import android.os.Build
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -14,7 +19,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -36,11 +40,24 @@ import androidx.compose.ui.unit.dp
 import com.kyant.backdrop.isRuntimeShaderSupported
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.Add
+import top.yukonga.miuix.kmp.icon.extended.Background
+import top.yukonga.miuix.kmp.icon.extended.Copy
+import top.yukonga.miuix.kmp.icon.extended.Download
 import top.yukonga.miuix.kmp.icon.extended.ExpandLess
+import top.yukonga.miuix.kmp.icon.extended.Favorites
 import top.yukonga.miuix.kmp.icon.extended.Folder
+import top.yukonga.miuix.kmp.icon.extended.GridView
+import top.yukonga.miuix.kmp.icon.extended.Hide
 import top.yukonga.miuix.kmp.icon.extended.Info
+import top.yukonga.miuix.kmp.icon.extended.Lock
 import top.yukonga.miuix.kmp.icon.extended.Ok
+import top.yukonga.miuix.kmp.icon.extended.Phone
 import top.yukonga.miuix.kmp.icon.extended.Refresh
+import top.yukonga.miuix.kmp.icon.extended.Reset
+import top.yukonga.miuix.kmp.icon.extended.Th10
+import top.yukonga.miuix.kmp.icon.extended.Theme
+import top.yukonga.miuix.kmp.icon.extended.Tune
+import top.yukonga.miuix.kmp.icon.extended.Update
 import org.json.JSONObject
 import java.io.File
 
@@ -209,39 +226,72 @@ internal fun MSettingsPage(
 ) {
     val glassSupported = isRuntimeShaderSupported()
     MSection("Appearance") {
-        row { MDropdownRow("App style", listOf("Miuix", "Material"), s.uiStyle) { s.uiStyle = it } }
+        row { MDropdownRow("App style", listOf("Miuix", "Material"), s.uiStyle, icon = MiuixIcons.Tune) { s.uiStyle = it } }
         row {
             MPad {
-                Text("Theme", style = MaterialTheme.typography.bodyLarge)
+                Row(horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Icon(MiuixIcons.Theme, contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(22.dp))
+                    Text("Theme", style = MaterialTheme.typography.bodyLarge)
+                }
                 MSegmented(listOf("System", "Light", "Dark"), s.themeMode) { s.themeMode = it }
             }
         }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            row { MSwitchRow("Dynamic color", "Use colors from your wallpaper", s.monet) { s.monet = it } }
+            row { MSwitchRow("Dynamic color", "Use colors from your wallpaper", s.monet, icon = MiuixIcons.Background) { s.monet = it } }
+            // The seed swatches only make sense while the wallpaper isn't driving the scheme; the pane
+            // expands below the switch as soon as adaptive colors are turned off.
+            row {
+                AnimatedVisibility(
+                    visible = !s.monet,
+                    enter = expandVertically() + fadeIn(),
+                    exit = shrinkVertically() + fadeOut(),
+                ) {
+                    Column {
+                        Row(Modifier.padding(horizontal = 16.dp).padding(top = 14.dp, bottom = 8.dp),
+                            horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Icon(MiuixIcons.Favorites, contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(22.dp))
+                            Text("Theme color", style = MaterialTheme.typography.bodyLarge)
+                        }
+                        MSeedSwatchRow(s)
+                    }
+                }
+            }
+        } else {
+            row {
+                MPad {
+                    Row(horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Icon(MiuixIcons.Favorites, contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(22.dp))
+                        Text("Theme color", style = MaterialTheme.typography.bodyLarge)
+                    }
+                    MSeedSwatchRow(s)
+                }
+            }
         }
-        row { MSwitchRow("AMOLED dark", "Pure black background in the dark theme", s.amoled) { s.amoled = it } }
-        row { MSeedSwatchRow(s) }
-        row { MDropdownRow("Font", listOf("Intern", "Inter", "System"), s.fontChoice) { s.fontChoice = it } }
+        row { MSwitchRow("AMOLED dark", "Pure black background in the dark theme", s.amoled, icon = MiuixIcons.Hide) { s.amoled = it } }
+        row { MDropdownRow("Font", listOf("Intern", "Inter", "System"), s.fontChoice, icon = MiuixIcons.Th10) { s.fontChoice = it } }
         if (glassSupported) {
-            row { MSwitchRow("Liquid glass tab bar", "Turn off for the plain Material bar", s.glassBar) { s.glassBar = it } }
+            row { MSwitchRow("Liquid glass tab bar", "Turn off for the plain Material bar", s.glassBar, icon = MiuixIcons.GridView) { s.glassBar = it } }
         }
-        row { MSwitchRow("Haptics", "Vibrate on taps, switches and tab changes", s.haptics) { s.haptics = it } }
+        row { MSwitchRow("Haptics", "Vibrate on taps, switches and tab changes", s.haptics, icon = MiuixIcons.Phone) { s.haptics = it } }
     }
     MSection("Project") {
-        row { MSwitchRow("Copy identifier after compiling", "Puts the identifier on your clipboard when a compile succeeds", s.autoCopyId) { s.autoCopyId = it } }
+        row { MSwitchRow("Copy identifier after compiling", "Puts the identifier on your clipboard when a compile succeeds", s.autoCopyId, icon = MiuixIcons.Copy) { s.autoCopyId = it } }
         row {
             MArrowRow("Output folder", describeOutputFolder(s.outputDir) + (if (s.outputDir.isBlank()) " (default)" else ""),
                 icon = MiuixIcons.Folder, onClick = onPickOutputFolder)
         }
         if (s.outputDir.isNotBlank()) {
-            row { MArrowRow("Reset output folder", "Go back to Downloads/GS6Charts", onClick = onResetOutputFolder) }
+            row { MArrowRow("Reset output folder", "Go back to Downloads/GS6Charts", icon = MiuixIcons.Reset, onClick = onResetOutputFolder) }
         }
-        row { MArrowRow("New project", "Clear every field and start over", onClick = onNewProject) }
+        row { MArrowRow("New project", "Clear every field and start over", icon = MiuixIcons.Add, onClick = onNewProject) }
     }
     MSection("Updates") {
-        row { MSwitchRow("Check for updates on launch", "Looks up the newest GitHub release each time the app starts", s.updateCheck) { s.updateCheck = it } }
+        row { MSwitchRow("Check for updates on launch", "Looks up the newest GitHub release each time the app starts", s.updateCheck, icon = MiuixIcons.Update) { s.updateCheck = it } }
         row {
-            MDropdownRow("Update channel", listOf("Release (stable only)", "Preview (includes betas)"), s.updateChannel) { s.updateChannel = it }
+            MDropdownRow("Update channel", listOf("Release (stable only)", "Preview (includes betas)"), s.updateChannel, icon = MiuixIcons.Download) { s.updateChannel = it }
         }
         row {
             MArrowRow("Check for updates", if (checkingUpdate) "Checking…" else "Current version $version",
@@ -256,7 +306,7 @@ internal fun MSettingsPage(
     if (s.devMode) {
         MSection("Developer Mode") {
             row { MArrowRow("Private app data", "Browse the app's internal files", icon = MiuixIcons.Folder, onClick = onOpenDevFiles) }
-            row { MArrowRow("Disable developer mode", "Hide this section again", onClick = onDisableDev) }
+            row { MArrowRow("Disable developer mode", "Hide this section again", icon = MiuixIcons.Lock, onClick = onDisableDev) }
         }
     }
 }
@@ -278,45 +328,43 @@ private val SEED_PRESETS = listOf(
 )
 
 /** Editable Material colors: a row of seed swatches (plus a custom hex picker) that regenerates the
- *  whole scheme live. Wallpaper colors (Dynamic color) take precedence while enabled. */
+ *  whole scheme live. Shown below the Dynamic color switch while wallpaper colors are off. */
 @Composable
 private fun MSeedSwatchRow(s: AppSettings) {
     val haptic = LocalMHaptics.current
     var customOpen by remember { mutableStateOf(false) }
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text("Theme color", style = MaterialTheme.typography.bodyLarge)
-        if (s.monet && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            MHint("Dynamic color is on, so your wallpaper colors are used instead.")
-        }
-        Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            SEED_PRESETS.forEach { (argb, label) ->
-                val selected = s.seedColor == argb
-                Box(
-                    Modifier
-                        .size(36.dp)
-                        .clip(CircleShape)
-                        .then(
-                            if (argb == 0) Modifier.background(MaterialTheme.colorScheme.surfaceContainerHigh)
-                            else Modifier.background(Color(argb))
-                        )
-                        .clickable { haptic(); s.seedColor = argb },
-                    contentAlignment = Alignment.Center,
-                ) {
-                    if (selected) Icon(MiuixIcons.Ok, contentDescription = label,
-                        tint = if (argb == 0) MaterialTheme.colorScheme.onSurface else Color.White)
-                }
-            }
+    Row(
+        Modifier.padding(horizontal = 16.dp, vertical = 8.dp).horizontalScroll(rememberScrollState()),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        SEED_PRESETS.forEach { (argb, label) ->
+            val selected = s.seedColor == argb
             Box(
                 Modifier
-                    .size(36.dp)
+                    .size(40.dp)
                     .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.surfaceContainerHigh)
-                    .clickable { haptic(); customOpen = true },
+                    .then(
+                        if (argb == 0) Modifier.background(MaterialTheme.colorScheme.surfaceContainerHigh)
+                        else Modifier.background(Color(argb))
+                    )
+                    .clickable { haptic(); s.seedColor = argb },
                 contentAlignment = Alignment.Center,
             ) {
-                Icon(MiuixIcons.Add, contentDescription = "Custom color",
-                    tint = MaterialTheme.colorScheme.onSurface)
+                if (selected) Icon(MiuixIcons.Ok, contentDescription = label,
+                    tint = if (argb == 0) MaterialTheme.colorScheme.onSurface else Color.White)
             }
+        }
+        Box(
+            Modifier
+                .size(40.dp)
+                .clip(CircleShape)
+                .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+                .clickable { haptic(); customOpen = true },
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(MiuixIcons.Add, contentDescription = "Custom color",
+                tint = MaterialTheme.colorScheme.onSurface)
         }
     }
     if (customOpen) {
@@ -334,21 +382,18 @@ private fun MCustomSeedDialog(initial: Int, onDismiss: () -> Unit, onPick: (Int)
     val parsed = text.removePrefix("#").let {
         if (it.length == 6) it.toLongOrNull(16)?.toInt()?.or(0xFF000000.toInt()) else null
     }
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("Custom color") },
+    MDialog(
+        show = true, title = "Custom color",
+        onDismiss = onDismiss, confirmText = "Use", onConfirm = { if (parsed != null) onPick(parsed) },
+        confirmEnabled = parsed != null, dismissText = "Cancel",
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 OutlinedTextField(value = text, onValueChange = { text = it }, label = { Text("Hex (e.g. 546E7A)") }, singleLine = true)
                 if (parsed != null) {
-                    Box(
-                        Modifier.size(48.dp).clip(CircleShape).background(Color(parsed)).align(Alignment.CenterHorizontally)
-                    ) {}
+                    Box(Modifier.size(48.dp).clip(CircleShape).background(Color(parsed))) {}
                 }
             }
         },
-        confirmButton = { TextButton(onClick = { if (parsed != null) onPick(parsed) }, enabled = parsed != null) { Text("Use") } },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
     )
 }
 

@@ -34,7 +34,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -298,19 +297,15 @@ internal fun MaterialShell(c: AppController, dark: Boolean) {
         }
 
         // While Python works, lock the whole app behind an unclosable progress dialog.
-        if (busy) {
-            AlertDialog(
-                onDismissRequest = {}, title = { Text("Working…") },
-                text = {
-                    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                        LinearProgressIndicator(Modifier.fillMaxWidth())
-                        Text(status, style = MaterialTheme.typography.bodyMedium)
-                    }
-                },
-                confirmButton = {},
-                properties = DialogProperties(dismissOnBackPress = false, dismissOnClickOutside = false),
-            )
-        }
+        MDialog(
+            show = busy, title = "Working…", cancellable = false,
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    LinearProgressIndicator(Modifier.fillMaxWidth())
+                    Text(status, style = MaterialTheme.typography.bodyMedium)
+                }
+            },
+        )
 
         MConfirmDialog(
             show = pendingOverwrite != null, title = "Overwrite everything?",
@@ -350,21 +345,14 @@ internal fun MaterialShell(c: AppController, dark: Boolean) {
   }
 }
 
-// ---- Material dialogs ----------------------------------------------------------------------------
-
-@Composable
-private fun DialogScroll(content: @Composable ColumnScope.() -> Unit) {
-    Column(Modifier.heightIn(max = 360.dp).verticalScroll(rememberScrollState()), content = content)
-}
+// ---- Material dialogs (animated reveal) ------------------------------------------------------------
 
 @Composable
 private fun MInfoDialog(show: Boolean, title: String?, body: String, onDismiss: () -> Unit) {
-    if (!show) return
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = title?.let { { Text(it) } },
-        text = { DialogScroll { Text(body) } },
-        confirmButton = { TextButton(onClick = onDismiss) { Text("OK") } },
+    MDialog(
+        show = show, title = title,
+        text = { Text(body) },
+        confirmText = "OK", onConfirm = onDismiss, onDismiss = onDismiss,
     )
 }
 
@@ -373,38 +361,32 @@ private fun MConfirmDialog(
     show: Boolean, title: String, body: String, confirmText: String,
     onConfirm: () -> Unit, onDismiss: () -> Unit,
 ) {
-    if (!show) return
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(title) },
-        text = { DialogScroll { Text(body) } },
-        confirmButton = { TextButton(onClick = onConfirm) { Text(confirmText) } },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+    MDialog(
+        show = show, title = title,
+        text = { Text(body) },
+        confirmText = confirmText, onConfirm = onConfirm,
+        dismissText = "Cancel", onDismiss = onDismiss,
     )
 }
 
 @Composable
 private fun MHexDialog(file: HexFile?, onDismiss: () -> Unit) {
     if (file == null) return
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(file.name) },
+    MDialog(
+        show = true, title = file.name, onDismiss = onDismiss, confirmText = "OK", onConfirm = onDismiss,
         text = {
-            Column {
-                val shown = if (file.bytes.size.toLong() < file.totalSize)
-                    "First ${file.bytes.size} of ${file.totalSize} bytes. Hold the file in the list to export all of it."
-                else "${file.totalSize} bytes. Hold the file in the list to export it."
-                MHint(shown, Modifier.padding(bottom = 8.dp))
-                val mono = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace, fontSize = 10.sp)
-                Box(Modifier.horizontalScroll(rememberScrollState())) {
-                    LazyColumn(Modifier.heightIn(max = 360.dp)) {
-                        items((file.bytes.size + HEX_BYTES_PER_LINE - 1) / HEX_BYTES_PER_LINE) { line ->
-                            Text(hexLine(file.bytes, line), style = mono, maxLines = 1)
-                        }
+            val shown = if (file.bytes.size.toLong() < file.totalSize)
+                "First ${file.bytes.size} of ${file.totalSize} bytes. Hold the file in the list to export all of it."
+            else "${file.totalSize} bytes. Hold the file in the list to export it."
+            MHint(shown, Modifier.padding(bottom = 8.dp))
+            val mono = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace, fontSize = 10.sp)
+            Box(Modifier.horizontalScroll(rememberScrollState())) {
+                LazyColumn(Modifier.heightIn(max = 360.dp)) {
+                    items((file.bytes.size + HEX_BYTES_PER_LINE - 1) / HEX_BYTES_PER_LINE) { line ->
+                        Text(hexLine(file.bytes, line), style = mono, maxLines = 1)
                     }
                 }
             }
         },
-        confirmButton = { TextButton(onClick = onDismiss) { Text("OK") } },
     )
 }
