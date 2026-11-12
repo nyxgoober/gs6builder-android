@@ -174,6 +174,7 @@ internal fun MaterialShell(c: AppController, dark: Boolean) {
                             s, onNewProject = onNewProject,
                             version = currentVersion, checkingUpdate = checkingUpdate,
                             onCheckUpdate = onCheckUpdate, onOpenLicenses = onOpenLicenses,
+                            onOpenAppInfo = onOpenAppInfo,
                             onPickOutputFolder = onPickFolder, onResetOutputFolder = onResetFolder,
                             onUnlockDev = onUnlockDev, onOpenDevFiles = onOpenDevFiles, onDisableDev = onDisableDev,
                         )
@@ -189,7 +190,9 @@ internal fun MaterialShell(c: AppController, dark: Boolean) {
             ) {
                 Box(Modifier.fillMaxSize().background(bg).pointerInput(Unit) { detectTapGestures { } }) {
                     MPage(
-                        title = when (lastSubPage) { SubPage.Licenses -> "Licenses"; SubPage.DevFiles -> "App data" },
+                        title = when (lastSubPage) {
+                            SubPage.Licenses -> "Licenses"; SubPage.DevFiles -> "App data"; SubPage.AppInfo -> "App info"
+                        },
                         scroll = rememberScrollState(), bottomPad = navInset + 16.dp, onBack = { subPage = null },
                     ) {
                         when (lastSubPage) {
@@ -197,6 +200,15 @@ internal fun MaterialShell(c: AppController, dark: Boolean) {
                             SubPage.DevFiles -> MDevFileExplorer(
                                 root = b.appDataDir,
                                 onOpenFile = { f -> openDevFile(f) }, onExportFile = { f -> exportDevFile(f) },
+                            )
+                            SubPage.AppInfo -> AppInfoContent(
+                                context = context, backend = b, ownScroll = false,
+                                colors = AppInfoColors(
+                                    on = MaterialTheme.colorScheme.onSurface,
+                                    muted = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    card = MaterialTheme.colorScheme.surfaceContainer,
+                                ),
+                                textStyle = MaterialTheme.typography.bodyLarge,
                             )
                         }
                     }

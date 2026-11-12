@@ -17,11 +17,14 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.TileMode
 import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.drawscope.scale
@@ -41,12 +44,25 @@ import kotlinx.coroutines.launch
 // hammer, splash_hammer = the hammer alone on transparency). They share one square canvas, 768 px
 // (the 192 px export upscaled 4x), so stacking them at the same size lines them up exactly.
 
-private val SPLASH_BG = Color(0xFFB2AFBD)            // = ic_launcher_background
 private const val LAYER_PX = 768f
+
+// Muted green/cyan blurred gradient background: soft green and cyan glows fading into a calm
+// grey-green base, offset diagonally so it reads like a blurred colour wash rather than bands.
+private val SPLASH_BG_BASE = Color(0xFF3B4642)
+private val SPLASH_GREEN = Color(0xFF437055)
+private val SPLASH_CYAN = Color(0xFF3E6E74)
+
 private val HAMMER_PIVOT = Offset(173f, 591f)        // centre of the handle's rounded end, in layer pixels
 private const val RAISED = -24f                      // degrees; negative lifts the head
 private const val WINDUP = -31f
 private const val STRIKE = 7f
+
+// Shared with the Settings → About → App info page: it reuses the icon artwork and the hammer
+// thump animation on its interactive icon.
+internal const val APP_ICON_LAYER_PX = 768f
+internal val APP_ICON_HAMMER_PIVOT = Offset(173f, 591f)
+internal const val APP_ICON_WINDUP = -31f
+internal const val APP_ICON_STRIKE = 7f
 
 @Composable
 internal fun HammerSplash(onFinished: () -> Unit) {
@@ -79,7 +95,26 @@ internal fun HammerSplash(onFinished: () -> Unit) {
     Box(
         Modifier.fillMaxSize()
             .graphicsLayer { alpha = fade.value }
-            .background(SPLASH_BG)
+            .drawBehind {
+                // Blurred green/cyan wash: two soft radial glows over a muted base.
+                drawRect(SPLASH_BG_BASE)
+                drawRect(
+                    Brush.radialGradient(
+                        colors = listOf(SPLASH_GREEN, SPLASH_GREEN.copy(alpha = 0f)),
+                        center = Offset(size.width * 0.25f, size.height * 0.25f),
+                        radius = size.minDimension * 1.05f,
+                        tileMode = TileMode.Clamp,
+                    ),
+                )
+                drawRect(
+                    Brush.radialGradient(
+                        colors = listOf(SPLASH_CYAN, SPLASH_CYAN.copy(alpha = 0f)),
+                        center = Offset(size.width * 0.78f, size.height * 0.72f),
+                        radius = size.minDimension * 0.95f,
+                        tileMode = TileMode.Clamp,
+                    ),
+                )
+            }
             .pointerInput(Unit) { },                  // swallow touches until the app is revealed
         contentAlignment = Alignment.Center,
     ) {

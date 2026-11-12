@@ -54,7 +54,6 @@ import top.yukonga.miuix.kmp.icon.extended.Ok
 import top.yukonga.miuix.kmp.icon.extended.Refresh
 import top.yukonga.miuix.kmp.icon.extended.Reset
 import top.yukonga.miuix.kmp.icon.extended.Theme
-import top.yukonga.miuix.kmp.icon.extended.Tune
 import top.yukonga.miuix.kmp.icon.extended.Update
 import org.json.JSONObject
 import java.io.File
@@ -220,14 +219,13 @@ internal fun MMetadataPage(st: Store, onRegen: () -> Unit, onCopy: () -> Unit) {
 @Composable
 internal fun MSettingsPage(
     s: AppSettings, onNewProject: () -> Unit,
-    version: String, checkingUpdate: Boolean, onCheckUpdate: () -> Unit,
-    onOpenLicenses: () -> Unit,
+    version: String, checkingUpdate: Boolean,     onCheckUpdate: () -> Unit,
+    onOpenLicenses: () -> Unit, onOpenAppInfo: () -> Unit,
     onPickOutputFolder: () -> Unit, onResetOutputFolder: () -> Unit,
     onUnlockDev: () -> Unit, onOpenDevFiles: () -> Unit, onDisableDev: () -> Unit,
 ) {
     val glassSupported = isRuntimeShaderSupported()
     MSection("Appearance") {
-        row { MDropdownRow("App style", listOf("Miuix", "Material"), s.uiStyle, icon = MiuixIcons.Tune) { s.uiStyle = it } }
         row {
             MPad {
                 Row(horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -289,6 +287,7 @@ internal fun MSettingsPage(
     // hidden dev section; its own gap lives inside the animation and expands/collapses with it.
     Column {
         MSection("About") {
+            row { MArrowRow("App info", "Version, release and build attestation", icon = MiuixIcons.Info, onClick = onOpenAppInfo) }
             row { MArrowRow("Open-source licenses", "Libraries, fonts and bundled code this app uses", icon = MiuixIcons.Info, onClick = onOpenLicenses) }
         }
         AnimatedVisibility(

@@ -194,6 +194,22 @@ jobs:
           grep -q 'version = "3.13"' app/build.gradle.kts \
             || { echo "::error::no 'version = \"3.13\"' in chaquopy block of app/build.gradle.kts"; exit 1; }
 
+      - name: Set bundled Chaquopy version from the plugin
+        run: |
+          # The App info page shows the Chaquopy version the build actually used; inject the plugin
+          # version from the root build.gradle.kts into BuildConfig so it can't drift from the build.
+          CHAQUOPY_PLUGIN=$(grep -oE 'com\.chaquo\.python"\) version "[0-9.]+"' build.gradle.kts | grep -oE '[0-9]+\.[0-9]+\.[0-9]+')
+          if [ -z "$CHAQUOPY_PLUGIN" ]; then
+            echo "::error::could not read the com.chaquo.python plugin version from build.gradle.kts"
+            exit 1
+          fi
+          echo "Chaquopy plugin: $CHAQUOPY_PLUGIN"
+          sed -i -E "s/buildConfigField\(\"String\", \"CHAQUOPY_VERSION\", \"[^\"]+\"\)/buildConfigField(\"String\", \"CHAQUOPY_VERSION\", \"${CHAQUOPY_PLUGIN}\")/" app/build.gradle.kts
+          echo "--- injected ---"
+          grep CHAQUOPY_VERSION app/build.gradle.kts
+          grep -q "buildConfigField(\"String\", \"CHAQUOPY_VERSION\", \"${CHAQUOPY_PLUGIN}\")" app/build.gradle.kts \
+            || { echo "::error::failed to set BuildConfig.CHAQUOPY_VERSION in app/build.gradle.kts"; exit 1; }
+
       - name: Restrict architecture to arm64-v8a
         run: sed -i 's/listOf("arm64-v8a", "x86_64")/listOf("arm64-v8a")/' app/build.gradle.kts
 

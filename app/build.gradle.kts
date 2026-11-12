@@ -16,9 +16,11 @@ android {
         targetSdk = 35
         versionCode = 3
         versionName = "2.1.0"
+        // Keep in sync with the com.chaquo.python plugin version in the root build.gradle.kts.
+        buildConfigField("String", "CHAQUOPY_VERSION", "\"17.0.0\"")
         ndk { abiFilters += listOf("arm64-v8a") }
     }
-    buildFeatures { compose = true }
+    buildFeatures { compose = true; buildConfig = true }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
@@ -53,7 +55,7 @@ kotlin {
 
 chaquopy {
     defaultConfig {
-        version = "3.11"           
+        version = "3.13"
         buildPython("python3")    
         extractPackages("archspec")   // archspec reads ../json/cpu/*.json via __file__, so it must live on disk
         pip {

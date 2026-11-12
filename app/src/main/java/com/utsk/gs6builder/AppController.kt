@@ -34,7 +34,7 @@ internal val TAB_LABELS = listOf("Import", "Files", "Metadata", "Settings")
 internal val IMPORT_KINDS = listOf("UntitledCharts link", "Chart Cyanvas (CC Archive) link", ".zip project")
 
 /** Full-screen pages that slide over the tab pages (opened from Settings / dev mode). */
-internal enum class SubPage { Licenses, DevFiles }
+internal enum class SubPage { Licenses, DevFiles, AppInfo }
 
 /**
  * Everything the app *does*, with no UI in it: the project [Store], dialog/sheet flags, Python calls,
@@ -49,7 +49,7 @@ internal class AppController(
     private val haptic: HapticFeedback,
     val pagerState: PagerState,
 ) {
-    val st = Store().also { it.loadFresh(b.call("new_project")) }
+    val st = Store().also { it.loadFresh(freshProjectJson()) }
 
     var status by mutableStateOf("Starting…")
     var busy by mutableStateOf(false)
@@ -90,6 +90,23 @@ internal class AppController(
 
     /** 0 = Import (while its sheet is open), 1..3 = Files, Metadata, Settings. The pager is the source of truth. */
     val currentTabIndex: Int get() = if (showImport) 0 else pagerState.targetPage + 1
+
+    /**
+     * Fresh empty project. Normally comes from Python; if Python isn't available (e.g. a UI-preview
+     * build without the bundled requirements) fall back to the same schema in Kotlin so the UI
+     * still opens instead of crashing.
+     */
+    fun freshProjectJson(): String =
+        runCatching { b.call("new_project") }.getOrElse {
+            """
+            {"jacket":"","track":"","track_pre":"","mvs":[],
+             "charts":[{"difficulty":"master","level":1,"path":"","lenient":false}],
+             "title":"","charter":"","lyricist":"","composer":"","arranger":"","artist":"","vocals":"",
+             "collab":"","original":"","is_full":true,"offset_ms":0,"mv_offset_ms":0,
+             "default_vocal_name":"","default_vocal_type":"original_song","alt_vocals":[],
+             "identifier":"${java.util.UUID.randomUUID()}_${java.util.UUID.randomUUID()}"}
+            """.trimIndent()
+        }
 
     // Set by [rememberAppController]: they wrap the activity-result launchers.
     internal var openDocument: (Array<String>) -> Unit = {}
@@ -364,11 +381,16 @@ internal class AppController(
     // composed side by side don't recompose just because the shell did. ---------------------------
     val onPickFile: PickFile get() = pickFile
     val onCheckRow: (JSONObject, Boolean) -> Unit = { row, lenient -> checkRow(row, lenient) }
-    val onRegen: () -> Unit = { st.set("identifier", b.call("new_uuid")) }
+    val onRegen: () -> Unit = {
+        runCatching { b.call("new_uuid") }.getOrElse {
+            java.util.UUID.randomUUID().toString() + "_" + java.util.UUID.randomUUID().toString()
+        }.let { st.set("identifier", it) }
+    }
     val onCopy: () -> Unit = { b.copyText(st.str("identifier")); status = "Identifier copied." }
     val onNewProject: () -> Unit = { confirmReset = true }
     val onCheckUpdate: () -> Unit = { checkForUpdate(true) }
     val onOpenLicenses: () -> Unit = { openSubPage(SubPage.Licenses) }
+    val onOpenAppInfo: () -> Unit = { openSubPage(SubPage.AppInfo) }
     val onPickFolder: () -> Unit = { openTree() }
     val onResetFolder: () -> Unit = { b.releaseTree(s.outputDir); s.outputDir = "" }
     val onUnlockDev: () -> Unit = { unlockDevTab() }
@@ -377,7 +399,7 @@ internal class AppController(
 
     /** Dialog confirm actions shared by both UIs. */
     fun confirmOverwrite() { val a = pendingOverwrite; pendingOverwrite = null; a?.invoke() }
-    fun confirmNewProject() { confirmReset = false; st.loadFresh(b.call("new_project")); status = "New project." }
+    fun confirmNewProject() { confirmReset = false; st.loadFresh(freshProjectJson()); status = "New project." }
     fun confirmUnsupported() { val row = unsupported?.first; unsupported = null; if (row != null) checkRow(row, true) }
     fun confirmUpdate() {
         val t = updateTag; updateTag = null

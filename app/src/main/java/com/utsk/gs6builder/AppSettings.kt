@@ -44,9 +44,7 @@ class AppSettings(context: Context) {
     var fontChoice by IntSetting(sp, "font_choice", 0)
     var glassBar by BoolSetting(sp, "glass_bar", true)
 
-    /** 0 = Miuix, 1 = Material (default). The two UIs are separate; this only picks which one is shown. */
-    var uiStyle by IntSetting(sp, "ui_style", 1)
-    /** Material mode only: pure black surfaces in dark theme. */
+    /** Pure black surfaces in dark theme. */
     var amoled by BoolSetting(sp, "amoled", false)
     /** 0 = default scheme, otherwise the ARGB seed the Material scheme is generated from. */
     var seedColor by IntSetting(sp, "seed_color", 0)
