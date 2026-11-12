@@ -1,7 +1,13 @@
 package com.utsk.gs6builder
 
 import android.os.Build
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.MutableTransitionState
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.spring
@@ -29,7 +35,6 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -48,6 +53,10 @@ import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.snapshotFlow
+import androidx.compose.runtime.key
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -72,8 +81,9 @@ import com.materialkolor.dynamicColorScheme
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.ChevronForward
 import top.yukonga.miuix.kmp.icon.extended.Clear
-import top.yukonga.miuix.kmp.icon.extended.ExpandMore
 import top.yukonga.miuix.kmp.icon.extended.Ok
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.first
 import java.io.File
 
 // ---- theme -------------------------------------------------------------------------------------
@@ -124,6 +134,8 @@ internal val LocalMHaptics = staticCompositionLocalOf { {} }
 
 private const val BUTTON_RADIUS_REST = 26
 private const val BUTTON_RADIUS_PRESSED = 6
+/** A tap is over in well under 100 ms; keep the pressed shape at least this long so it is always seen. */
+private const val MIN_PRESSED_MS = 170L
 
 /** Interaction source + corner radius animated from rest to pressed; share it between the button's
  *  [shape] and [interactionSource] so the press is what drives the animation. */
@@ -131,17 +143,27 @@ private const val BUTTON_RADIUS_PRESSED = 6
 internal fun rememberExpressiveShape(source: MutableInteractionSource): Shape {
     val pressed by source.collectIsPressedAsState()
     val hovered by source.collectIsHoveredAsState()
+    // Latch the press: a quick tap releases before the spring has moved, so without this the squish
+    // is only visible if you hold the button down.
+    var latched by remember { mutableStateOf(false) }
+    LaunchedEffect(pressed) {
+        if (pressed) latched = true
+        else if (latched) { delay(MIN_PRESSED_MS); latched = false }
+    }
+    val squished = pressed || latched || hovered
     val radius by animateDpAsState(
-        targetValue = if (pressed || hovered) BUTTON_RADIUS_PRESSED.dp else BUTTON_RADIUS_REST.dp,
-        // Springs from wherever it currently is, so an abrupt press-cancel (dialog stealing input)
-        // glides back instead of snapping; slow enough to read even when something opens over it.
-        animationSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = 550f),
+        targetValue = if (squished) BUTTON_RADIUS_PRESSED.dp else BUTTON_RADIUS_REST.dp,
+        // Snappy on the way in so it reads immediately; softer, slightly springy on the way out.
+        animationSpec = if (squished) spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = 1800f)
+                        else spring(dampingRatio = 0.7f, stiffness = 500f),
         label = "buttonRadius",
     )
-    return RoundedCornerShape(radius)
+    return RoundedCornerShape(radius.coerceAtLeast(0.dp))
 }
 
-/** A Material button with the expressive corner-radius press. [primary] = filled, otherwise tonal. */
+/** A Material button with the expressive corner-radius press. [primary] = filled, otherwise tonal.
+ *  One composable call for both looks, so flipping [primary] (e.g. Compile becoming ready) keeps the
+ *  button's state and its running animation instead of recreating it. */
 @Composable
 internal fun MButton(
     onClick: () -> Unit,
@@ -153,18 +175,13 @@ internal fun MButton(
     val haptic = LocalMHaptics.current
     val source = remember { MutableInteractionSource() }
     val shape = rememberExpressiveShape(source)
-    val click = { haptic(); onClick() }
-    if (primary) {
-        Button(
-            onClick = click, modifier = modifier, enabled = enabled, shape = shape,
-            interactionSource = source, colors = ButtonDefaults.buttonColors(), content = content,
-        )
-    } else {
-        FilledTonalButton(
-            onClick = click, modifier = modifier, enabled = enabled, shape = shape,
-            interactionSource = source, content = content,
-        )
-    }
+    Button(
+        onClick = { haptic(); onClick() }, modifier = modifier, enabled = enabled, shape = shape,
+        interactionSource = source,
+        colors = if (primary) ButtonDefaults.buttonColors() else ButtonDefaults.filledTonalButtonColors(),
+        elevation = if (primary) ButtonDefaults.buttonElevation() else ButtonDefaults.filledTonalButtonElevation(),
+        content = content,
+    )
 }
 
 // ---- animated dialogs -----------------------------------------------------------------------------
@@ -241,31 +258,97 @@ internal fun MDialog(
 // ---- grouped sections ----------------------------------------------------------------------------
 
 internal class GroupScope {
-    val rows = mutableListOf<@Composable () -> Unit>()
-    fun row(content: @Composable () -> Unit) { rows += content }
+    class Entry(val key: Any?, val visible: Boolean, val content: @Composable () -> Unit)
+    val entries = mutableListOf<Entry>()
+
+    /** [key] must be stable and unique for rows that come and go (list items, add buttons), otherwise
+     *  Compose matches rows by position and a row inserted above one hands it the wrong state, which
+     *  restarts its animations. Rows without a key are numbered in order, so they only need one if a
+     *  keyed row can sit before them. [visible] = false keeps the row but collapses it with an animation. */
+    fun row(key: Any? = null, visible: Boolean = true, content: @Composable () -> Unit) {
+        entries += Entry(key, visible, content)
+    }
 }
 
 private val OUTER = 28.dp
 private val INNER = 6.dp
+private val ROW_GAP = 2.dp
 
-/** A small coloured title over a group of rows that are separate cards with tiny gaps and big outer corners. */
+/** What a section remembers between compositions so rows that left the list can finish animating out. */
+private class SectionMemory {
+    var settled = false
+    var order: List<Any> = emptyList()                       // keys as last displayed, ghosts included
+    val entries = HashMap<Any, GroupScope.Entry>()           // last displayed entry per key
+    val ghosts = LinkedHashMap<Any, GroupScope.Entry>()      // removed rows still collapsing
+}
+
+/** A small coloured title over a group of rows that are separate cards with tiny gaps and big outer corners.
+ *  Rows added after the section first appears (a new chart, a revealed option) grow in. Rows hidden with
+ *  `visible = false` or dropped from the list (a removed chart) shrink out together with their gap, so
+ *  nothing is left behind and nothing vanishes abruptly. */
 @Composable
 internal fun MSection(title: String, build: GroupScope.() -> Unit) {
     val g = GroupScope().apply(build)
+    val mem = remember { SectionMemory() }
+    var tick by remember { mutableIntStateOf(0) }
+    @Suppress("UNUSED_EXPRESSION") tick   // read, so a finished exit recomposes and drops its ghost
+    // What is on screen at the first composition just appears; anything that shows up later animates.
+    val animateNew = mem.settled
+    SideEffect { mem.settled = true }
+
+    var unkeyed = 0
+    val current = g.entries.map { (it.key ?: "row#${unkeyed++}") to it }
+    val currentKeys = current.mapTo(HashSet()) { it.first }
+
+    // A row that was shown last time but is gone now keeps composing as a hidden "ghost" until its exit ends.
+    for (k in mem.order) {
+        if (k !in currentKeys && k !in mem.ghosts) mem.entries[k]?.let { mem.ghosts[k] = GroupScope.Entry(it.key, false, it.content) }
+    }
+    mem.ghosts.keys.removeAll(currentKeys)   // a key that came back is a normal row again
+    val shown = current.toMutableList()
+    for ((idx, k) in mem.order.withIndex()) {
+        val ghost = mem.ghosts[k] ?: continue
+        // Re-insert it right after the nearest earlier row that is still displayed.
+        val anchor = (idx - 1 downTo 0).firstNotNullOfOrNull { j -> shown.indexOfFirst { it.first == mem.order[j] }.takeIf { it >= 0 } }
+        shown.add((anchor ?: -1) + 1, k to ghost)
+    }
+    mem.order = shown.map { it.first }
+    mem.entries.clear(); shown.forEach { mem.entries[it.first] = it.second }
+
+    val first = shown.indexOfFirst { it.second.visible }
+    val last = shown.indexOfLast { it.second.visible }
+
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text(
             title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(horizontal = 16.dp),
         )
-        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            g.rows.forEachIndexed { i, rowContent ->
-                val top = if (i == 0) OUTER else INNER
-                val bottom = if (i == g.rows.lastIndex) OUTER else INNER
-                Surface(
-                    shape = RoundedCornerShape(topStart = top, topEnd = top, bottomStart = bottom, bottomEnd = bottom),
-                    color = MaterialTheme.colorScheme.surfaceContainer,
-                    modifier = Modifier.fillMaxWidth(),
-                ) { rowContent() }
+        Column {
+            shown.forEachIndexed { i, (k, e) ->
+                key(k) {
+                    val state = remember { MutableTransitionState(if (animateNew) false else e.visible) }
+                    state.targetState = e.visible
+                    if (k in mem.ghosts) {
+                        LaunchedEffect(Unit) {
+                            snapshotFlow { state.isIdle && !state.currentState }.first { it }
+                            mem.ghosts.remove(k); tick++
+                        }
+                    }
+                    AnimatedVisibility(
+                        visibleState = state,
+                        enter = expandVertically() + fadeIn(),
+                        exit = shrinkVertically() + fadeOut(),
+                    ) {
+                        val top = if (i == first) OUTER else INNER
+                        val bottom = if (i == last) OUTER else INNER
+                        Surface(
+                            shape = RoundedCornerShape(topStart = top, topEnd = top, bottomStart = bottom, bottomEnd = bottom),
+                            color = MaterialTheme.colorScheme.surfaceContainer,
+                            // The gap lives inside the animated row so it collapses with it.
+                            modifier = Modifier.fillMaxWidth().padding(top = if (i == first) 0.dp else ROW_GAP),
+                        ) { e.content() }
+                    }
+                }
             }
         }
     }
@@ -351,7 +434,7 @@ internal fun MDropdownRow(
                     tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(22.dp))
             }
             RowTexts(title, options.getOrElse(selected) { "" }, Modifier.weight(1f))
-            Icon(MiuixIcons.ExpandMore, contentDescription = null,
+            Icon(MIcons.ExpandMore, contentDescription = null,
                 tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(20.dp))
         }
         DropdownMenu(expanded = open, onDismissRequest = { open = false }) {

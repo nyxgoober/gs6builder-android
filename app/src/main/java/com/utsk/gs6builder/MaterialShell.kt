@@ -213,22 +213,17 @@ internal fun MaterialShell(c: AppController, dark: Boolean) {
         ) {
             Column(
                 Modifier.fillMaxWidth()
-                    // Pad before the background: nothing may be painted behind the system navigation
-                    // pill, or it reads as a second bar when the pill is picked up.
+                    // Fade the page out above the controls, then stay fully opaque through the system
+                    // navigation inset so scrolled content can't show beneath the gesture pill.
+                    .background(Brush.verticalGradient(0f to bg.copy(alpha = 0f), 0.3f to bg))
                     .padding(bottom = barInset)
-                    .background(Brush.verticalGradient(0f to Color.Transparent, 0.3f to bg))
                     .onSizeChanged { bottomPx = it.height },
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     MButton(modifier = Modifier.weight(1f), enabled = ready && !busy, onClick = { buildZip() }) { Text("Build zip") }
                     val canCompile = ready && missingFields().isEmpty()
-                    val compileClick = { onCompilePressed() }
-                    if (canCompile) {
-                        MButton(modifier = Modifier.weight(1f), primary = true, enabled = !busy, onClick = compileClick) { Text("Compile") }
-                    } else {
-                        MButton(modifier = Modifier.weight(1f), enabled = !busy, onClick = compileClick) { Text("Compile") }
-                    }
+                    MButton(modifier = Modifier.weight(1f), primary = canCompile, enabled = !busy, onClick = { onCompilePressed() }) { Text("Compile") }
                 }
                 if (useGlass) {
                     val contentColor = MaterialTheme.colorScheme.onSurface

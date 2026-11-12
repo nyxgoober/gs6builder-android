@@ -11,9 +11,15 @@ import android.os.Environment
 import android.provider.DocumentsContract
 import android.provider.MediaStore
 import android.provider.OpenableColumns
+import android.provider.Settings
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.Modifier
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.Box
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.setValue
 import com.chaquo.python.Python
@@ -163,6 +169,15 @@ class MainActivity : ComponentActivity() {
         if (!Python.isStarted()) Python.start(AndroidPlatform(this))
         val backend = Backend(this)
         val settings = AppSettings(this)
-        setContent { Root(this@MainActivity, backend, settings) }
+        // Skipped when the system animation scale is 0 ("remove animations").
+        val animationsOn = Settings.Global.getFloat(contentResolver, Settings.Global.ANIMATOR_DURATION_SCALE, 1f) > 0f
+        setContent {
+            // Saveable, so rotating or recreating the activity doesn't replay it.
+            var splash by rememberSaveable { mutableStateOf(animationsOn) }
+            Box(Modifier.fillMaxSize()) {
+                Root(this@MainActivity, backend, settings)
+                if (splash) HammerSplash { splash = false }
+            }
+        }
     }
 }

@@ -1,14 +1,14 @@
 package com.utsk.gs6builder
 
 import android.os.Build
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -51,10 +51,8 @@ import top.yukonga.miuix.kmp.icon.extended.Hide
 import top.yukonga.miuix.kmp.icon.extended.Info
 import top.yukonga.miuix.kmp.icon.extended.Lock
 import top.yukonga.miuix.kmp.icon.extended.Ok
-import top.yukonga.miuix.kmp.icon.extended.Phone
 import top.yukonga.miuix.kmp.icon.extended.Refresh
 import top.yukonga.miuix.kmp.icon.extended.Reset
-import top.yukonga.miuix.kmp.icon.extended.Th10
 import top.yukonga.miuix.kmp.icon.extended.Theme
 import top.yukonga.miuix.kmp.icon.extended.Tune
 import top.yukonga.miuix.kmp.icon.extended.Update
@@ -82,8 +80,9 @@ internal fun MFilesPage(st: Store, pickFile: PickFile, check: (JSONObject, Boole
         val mvs = st.arr("mvs")
         for (i in 0 until mvs.length()) {
             val mv = mvs.getJSONObject(i)
-            row { MChoice("Type", mv.getString("kind"), MV_TYPES) { mv.put("kind", it); st.touch() } }
-            row {
+            val id = System.identityHashCode(mv)
+            row("mv$id-kind") { MChoice("Type", mv.getString("kind"), MV_TYPES) { mv.put("kind", it); st.touch() } }
+            row("mv$id-file") {
                 MPad {
                     MFileRow("", mv.optString("path"),
                         onPick = { pickFile("mv$i", VIDEO) { mv.put("path", it); st.touch() } },
@@ -91,7 +90,7 @@ internal fun MFilesPage(st: Store, pickFile: PickFile, check: (JSONObject, Boole
                 }
             }
         }
-        if (mvs.length() < 2) row {
+        row("addMv", visible = mvs.length() < 2) {
             MPad {
                 MButton(modifier = Modifier.fillMaxWidth(), onClick = {
                     mvs.put(JSONObject().put("kind", MV_TYPES[mvs.length() % 2]).put("path", "")); st.touch()
@@ -102,11 +101,12 @@ internal fun MFilesPage(st: Store, pickFile: PickFile, check: (JSONObject, Boole
 
     MSection("Charts") {
         val rows = st.arr("charts")
-        row { MPad { MHint("Formats: .sus, .usc, Next SEKAI / Chart Cyanvas LevelData (.json, .json.gz, .nsld). Combo is automatic.") } }
+        row("chartHint") { MPad { MHint("Formats: .sus, .usc, Next SEKAI / Chart Cyanvas LevelData (.json, .json.gz, .nsld). Combo is automatic.") } }
         for (i in 0 until rows.length()) {
             val r = rows.getJSONObject(i)
-            row { MChoice("Difficulty", r.getString("difficulty"), DIFFICULTIES) { r.put("difficulty", it); st.touch() } }
-            row {
+            val id = System.identityHashCode(r)
+            row("ch$id-diff") { MChoice("Difficulty", r.getString("difficulty"), DIFFICULTIES) { r.put("difficulty", it); st.touch() } }
+            row("ch$id-file") {
                 MPad {
                     MTextField(r.optString("level", "1"), { r.put("level", it); st.touch() }, label = "Level 1–99", number = true)
                     MHint("combo ${r.optString("combo", "-")}")
@@ -122,7 +122,7 @@ internal fun MFilesPage(st: Store, pickFile: PickFile, check: (JSONObject, Boole
                 }
             }
         }
-        if (rows.length() < 6) row {
+        row("addChart", visible = rows.length() < 6) {
             MPad {
                 MButton(modifier = Modifier.fillMaxWidth(), onClick = {
                     val used = (0 until rows.length()).map { rows.getJSONObject(it).getString("difficulty") }.toSet()
@@ -144,7 +144,8 @@ internal fun MFilesPage(st: Store, pickFile: PickFile, check: (JSONObject, Boole
         val alts = st.arr("alt_vocals")
         for (i in 0 until alts.length()) {
             val v = alts.getJSONObject(i)
-            row {
+            val id = System.identityHashCode(v)
+            row("alt$id-head") {
                 MPad {
                     Text("Alt vocal ${i + 1}", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                     for ((key, label) in listOf("name" to "Name", "vocals" to "Vocals")) {
@@ -152,8 +153,8 @@ internal fun MFilesPage(st: Store, pickFile: PickFile, check: (JSONObject, Boole
                     }
                 }
             }
-            row { MChoice("Vocal type", v.optString("vocal_type"), VOCAL_TYPES) { v.put("vocal_type", it); st.touch() } }
-            row {
+            row("alt$id-type") { MChoice("Vocal type", v.optString("vocal_type"), VOCAL_TYPES) { v.put("vocal_type", it); st.touch() } }
+            row("alt$id-files") {
                 MPad {
                     MFileRow("Audio", v.optString("audio"), onPick = { pickFile("alt${i}_audio", AUDIO) { v.put("audio", it); st.touch() } })
                     MFileRow("Preview", v.optString("preview"), onPick = { pickFile("alt${i}_pre", AUDIO) { v.put("preview", it); st.touch() } })
@@ -164,7 +165,7 @@ internal fun MFilesPage(st: Store, pickFile: PickFile, check: (JSONObject, Boole
                 }
             }
         }
-        row {
+        row("addAlt") {
             MPad {
                 MButton(modifier = Modifier.fillMaxWidth(), onClick = {
                     alts.put(JSONObject().put("name", "").put("vocals", "").put("vocal_type", "original_song")
@@ -237,45 +238,29 @@ internal fun MSettingsPage(
                 MSegmented(listOf("System", "Light", "Dark"), s.themeMode) { s.themeMode = it }
             }
         }
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            row { MSwitchRow("Dynamic color", "Use colors from your wallpaper", s.monet, icon = MiuixIcons.Background) { s.monet = it } }
-            // The seed swatches only make sense while the wallpaper isn't driving the scheme; the pane
-            // expands below the switch as soon as adaptive colors are turned off.
-            row {
-                AnimatedVisibility(
-                    visible = !s.monet,
-                    enter = expandVertically() + fadeIn(),
-                    exit = shrinkVertically() + fadeOut(),
-                ) {
-                    Column {
-                        Row(Modifier.padding(horizontal = 16.dp).padding(top = 14.dp, bottom = 8.dp),
-                            horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Icon(MiuixIcons.Favorites, contentDescription = null,
-                                tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(22.dp))
-                            Text("Theme color", style = MaterialTheme.typography.bodyLarge)
-                        }
-                        MSeedSwatchRow(s)
-                    }
+        val canDynamic = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
+        if (canDynamic) {
+            row("dynamicColor") { MSwitchRow("Dynamic color", "Use colors from your wallpaper", s.monet, icon = MiuixIcons.Background) { s.monet = it } }
+        }
+        // The seed swatches only make sense while the wallpaper isn't driving the scheme. A real row
+        // (not an empty one wrapping AnimatedVisibility) so it, and its gap, collapse completely.
+        row("themeColor", visible = !(canDynamic && s.monet)) {
+            Column {
+                Row(Modifier.padding(horizontal = 16.dp).padding(top = 14.dp, bottom = 8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Icon(MiuixIcons.Favorites, contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(22.dp))
+                    Text("Theme color", style = MaterialTheme.typography.bodyLarge)
                 }
-            }
-        } else {
-            row {
-                MPad {
-                    Row(horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Icon(MiuixIcons.Favorites, contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(22.dp))
-                        Text("Theme color", style = MaterialTheme.typography.bodyLarge)
-                    }
-                    MSeedSwatchRow(s)
-                }
+                MSeedSwatchRow(s)
             }
         }
         row { MSwitchRow("AMOLED dark", "Pure black background in the dark theme", s.amoled, icon = MiuixIcons.Hide) { s.amoled = it } }
-        row { MDropdownRow("Font", listOf("Intern", "Inter", "System"), s.fontChoice, icon = MiuixIcons.Th10) { s.fontChoice = it } }
+        row { MDropdownRow("Font", listOf("Intern", "Inter", "System"), s.fontChoice, icon = MIcons.TextFields) { s.fontChoice = it } }
         if (glassSupported) {
             row { MSwitchRow("Liquid glass tab bar", "Turn off for the plain Material bar", s.glassBar, icon = MiuixIcons.GridView) { s.glassBar = it } }
         }
-        row { MSwitchRow("Haptics", "Vibrate on taps, switches and tab changes", s.haptics, icon = MiuixIcons.Phone) { s.haptics = it } }
+        row { MSwitchRow("Haptics", "Vibrate on taps, switches and tab changes", s.haptics, icon = MIcons.Vibration) { s.haptics = it } }
     }
     MSection("Project") {
         row { MSwitchRow("Copy identifier after compiling", "Puts the identifier on your clipboard when a compile succeeds", s.autoCopyId, icon = MiuixIcons.Copy) { s.autoCopyId = it } }
@@ -283,8 +268,8 @@ internal fun MSettingsPage(
             MArrowRow("Output folder", describeOutputFolder(s.outputDir) + (if (s.outputDir.isBlank()) " (default)" else ""),
                 icon = MiuixIcons.Folder, onClick = onPickOutputFolder)
         }
-        if (s.outputDir.isNotBlank()) {
-            row { MArrowRow("Reset output folder", "Go back to Downloads/GS6Charts", icon = MiuixIcons.Reset, onClick = onResetOutputFolder) }
+        row("resetOutput", visible = s.outputDir.isNotBlank()) {
+            MArrowRow("Reset output folder", "Go back to Downloads/GS6Charts", icon = MiuixIcons.Reset, onClick = onResetOutputFolder)
         }
         row { MArrowRow("New project", "Clear every field and start over", icon = MiuixIcons.Add, onClick = onNewProject) }
     }
@@ -300,13 +285,23 @@ internal fun MSettingsPage(
                 onClick = { if (!checkingUpdate) onCheckUpdate() })
         }
     }
-    MSection("About") {
-        row { MArrowRow("Open-source licenses", "Libraries, fonts and bundled code this app uses", icon = MiuixIcons.Info, onClick = onOpenLicenses) }
-    }
-    if (s.devMode) {
-        MSection("Developer Mode") {
-            row { MArrowRow("Private app data", "Browse the app's internal files", icon = MiuixIcons.Folder, onClick = onOpenDevFiles) }
-            row { MArrowRow("Disable developer mode", "Hide this section again", icon = MiuixIcons.Lock, onClick = onDisableDev) }
+    // About and Developer Mode share one column so the page's 20 dp section spacing isn't applied to a
+    // hidden dev section; its own gap lives inside the animation and expands/collapses with it.
+    Column {
+        MSection("About") {
+            row { MArrowRow("Open-source licenses", "Libraries, fonts and bundled code this app uses", icon = MiuixIcons.Info, onClick = onOpenLicenses) }
+        }
+        AnimatedVisibility(
+            visible = s.devMode,
+            enter = expandVertically() + fadeIn(),
+            exit = shrinkVertically() + fadeOut(),
+        ) {
+            Box(Modifier.padding(top = 20.dp)) {
+                MSection("Developer Mode") {
+                    row { MArrowRow("Private app data", "Browse the app's internal files", icon = MiuixIcons.Folder, onClick = onOpenDevFiles) }
+                    row { MArrowRow("Disable developer mode", "Hide this section again", icon = MiuixIcons.Lock, onClick = onDisableDev) }
+                }
+            }
         }
     }
 }
