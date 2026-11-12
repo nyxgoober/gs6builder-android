@@ -45,6 +45,7 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
+
       - name: Run sync script
         run: |
           chmod +x sync.sh
@@ -55,7 +56,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        pkg: 
+        pkg:
           - cricodecs
           - rg-converters
           - "UnityPy==1.24.2"
@@ -64,6 +65,7 @@ jobs:
           - astc-encoder-py
           - lz4
           - brotli
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
@@ -150,6 +152,7 @@ jobs:
       id-token: write
       contents: write
       attestations: write
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
@@ -195,20 +198,52 @@ jobs:
             || { echo "::error::no 'version = \"3.13\"' in chaquopy block of app/build.gradle.kts"; exit 1; }
 
       - name: Set bundled Chaquopy version from the plugin
+        shell: bash
         run: |
-          # The App info page shows the Chaquopy version the build actually used; inject the plugin
-          # version from the root build.gradle.kts into BuildConfig so it can't drift from the build.
-          CHAQUOPY_PLUGIN=$(grep -oE 'com\.chaquo\.python"\) version "[0-9.]+"' build.gradle.kts | grep -oE '[0-9]+\.[0-9]+\.[0-9]+')
-          if [ -z "$CHAQUOPY_PLUGIN" ]; then
-            echo "::error::could not read the com.chaquo.python plugin version from build.gradle.kts"
+          set -euo pipefail
+
+          CHAQUOPY_PLUGIN=$(grep -oE 'com\.chaquo\.python"\) version "[0-9.]+"' build.gradle.kts \
+            | grep -oE '[0-9]+\.[0-9]+\.[0-9]+')
+
+          if [[ -z "$CHAQUOPY_PLUGIN" ]]; then
+            echo "::error::Could not read Chaquopy plugin version"
             exit 1
           fi
+
           echo "Chaquopy plugin: $CHAQUOPY_PLUGIN"
-          sed -i -E "s/buildConfigField\(\"String\", \"CHAQUOPY_VERSION\", \"[^\"]+\"\)/buildConfigField(\"String\", \"CHAQUOPY_VERSION\", \"${CHAQUOPY_PLUGIN}\")/" app/build.gradle.kts
-          echo "--- injected ---"
-          grep CHAQUOPY_VERSION app/build.gradle.kts
-          grep -q "buildConfigField(\"String\", \"CHAQUOPY_VERSION\", \"${CHAQUOPY_PLUGIN}\")" app/build.gradle.kts \
-            || { echo "::error::failed to set BuildConfig.CHAQUOPY_VERSION in app/build.gradle.kts"; exit 1; }
+
+          python - "$CHAQUOPY_PLUGIN" <<'PY'
+          import re
+          import sys
+          from pathlib import Path
+
+          version = sys.argv[1]
+          path = Path("app/build.gradle.kts")
+          content = path.read_text()
+
+          pattern = r'buildConfigField\("String",\s*"CHAQUOPY_VERSION",\s*"[^"]*"\)'
+
+          replacement = (
+              f'buildConfigField("String", "CHAQUOPY_VERSION", "\\"{version}\\"")'
+          )
+
+          updated, count = re.subn(pattern, replacement, content)
+
+          if count != 1:
+              raise SystemExit(
+                  f"Expected exactly one CHAQUOPY_VERSION declaration, found {count}"
+              )
+
+          path.write_text(updated)
+
+          print("Injected:", replacement)
+          PY
+
+          echo "--- verification ---"
+          grep 'CHAQUOPY_VERSION' app/build.gradle.kts
+
+          grep -Fq "\"${CHAQUOPY_PLUGIN}\"" app/build.gradle.kts \
+            || { echo "::error::Chaquopy version injection failed"; exit 1; }
 
       - name: Restrict architecture to arm64-v8a
         run: sed -i 's/listOf("arm64-v8a", "x86_64")/listOf("arm64-v8a")/' app/build.gradle.kts
@@ -216,9 +251,8 @@ jobs:
       - name: Set app version from workflow input
         run: |
           RAW_VERSION="${{ github.event.inputs.version }}"
-          # Strip a leading "v"/"V" and any trailing prerelease tag such as
-          # "-rc1", "-beta2", "-alpha", etc., so versionName is always plain
-          # dotted digits (e.g. "v1.2.0-rc1" -> "1.2.0").
+
+          # Strip a leading "v"/"V" and trailing prerelease tag.
           VERSION_NAME=$(echo "$RAW_VERSION" | sed -E 's/^[vV]//; s/-[A-Za-z]+[0-9]*$//')
 
           if [ -z "$VERSION_NAME" ]; then
@@ -271,10 +305,12 @@ jobs:
         id: apk
         run: |
           APK_PATH=$(find app/build/outputs/apk/release -name "*.apk" | head -n1)
+
           if [ -z "$APK_PATH" ]; then
             echo "::error::no release APK found under app/build/outputs/apk/release"
             exit 1
           fi
+
           echo "path=$APK_PATH" >> "$GITHUB_OUTPUT"
 
       - name: Prepare APK for Release
