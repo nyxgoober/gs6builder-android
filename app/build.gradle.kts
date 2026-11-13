@@ -16,9 +16,11 @@ android {
         targetSdk = 35
         versionCode = 3
         versionName = "2.1.0"
+        // Keep in sync with the com.chaquo.python plugin version in the root build.gradle.kts.
+        buildConfigField("String", "CHAQUOPY_VERSION", "\"17.0.0\"")
         ndk { abiFilters += listOf("arm64-v8a") }
     }
-    buildFeatures { compose = true }
+    buildFeatures { compose = true; buildConfig = true }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
@@ -53,7 +55,7 @@ kotlin {
 
 chaquopy {
     defaultConfig {
-        version = "3.11"           
+        version = "3.13"
         buildPython("python3")    
         extractPackages("archspec")   // archspec reads ../json/cpu/*.json via __file__, so it must live on disk
         pip {
@@ -72,6 +74,10 @@ dependencies {
     implementation("top.yukonga.miuix.kmp:miuix-ui-android:$miuix")
     implementation("top.yukonga.miuix.kmp:miuix-preference-android:$miuix")
     implementation("top.yukonga.miuix.kmp:miuix-icons-android:$miuix")
+    // Material 3 for the separate "Material" UI mode (large top app bar, dynamic color).
+    implementation("org.jetbrains.compose.material3:material3:1.9.0")
+    // Generates a full M3 ColorScheme from an arbitrary seed color (the in-app theme color picker).
+    implementation("com.materialkolor:material-kolor:5.0.1")
     implementation("io.github.kyant0:backdrop:2.0.1")
     implementation("io.github.kyant0:shapes:1.2.1")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")

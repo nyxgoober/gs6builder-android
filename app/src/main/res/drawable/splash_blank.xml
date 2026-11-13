@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Intentionally empty: the Android 12+ system splash shows only its background colour, and the
+     in-app HammerSplash draws the icon (so the hammer can move). -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android">
+    <solid android:color="@android:color/transparent" />
+</shape>

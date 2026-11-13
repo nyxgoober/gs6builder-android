@@ -43,6 +43,13 @@ class AppSettings(context: Context) {
     /** 0 = Intern (default), 1 = Inter, 2 = System. */
     var fontChoice by IntSetting(sp, "font_choice", 0)
     var glassBar by BoolSetting(sp, "glass_bar", true)
+
+    /** Pure black surfaces in dark theme. */
+    var amoled by BoolSetting(sp, "amoled", false)
+    /** 0 = default scheme, otherwise the ARGB seed the Material scheme is generated from. */
+    var seedColor by IntSetting(sp, "seed_color", 0)
+    /** Vibrate on taps, switches and tab changes. */
+    var haptics by BoolSetting(sp, "haptics", true)
     var autoCopyId by BoolSetting(sp, "auto_copy_id", true)
 
     /** SAF tree URI of the folder compiled charts/zips are saved to; empty = Downloads/GS6Charts. */

@@ -1,3 +1,4 @@
+
 name: Build App
 
 on:
@@ -24,6 +25,14 @@ on:
         required: true
         default: 'v1.0.0'
         type: string
+      bump_version_code:
+        description: 'Increment versionCode? (leave false for non-major/patch builds)'
+        required: true
+        default: 'false'
+        type: choice
+        options:
+          - 'true'
+          - 'false'
       note:
         description: 'Release notes'
         required: true
@@ -37,6 +46,7 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
+
       - name: Run sync script
         run: |
           chmod +x sync.sh
@@ -47,7 +57,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        pkg: 
+        pkg:
           - cricodecs
           - rg-converters
           - "UnityPy==1.24.2"
@@ -56,6 +66,7 @@ jobs:
           - astc-encoder-py
           - lz4
           - brotli
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
@@ -86,33 +97,42 @@ jobs:
           python - <<'PY'
           import glob, os, re, shutil, tarfile
           sd = glob.glob("sdist/*.tar.gz")[0]
-          with tarfile.open(sd) as t: t.extractall("sdist")
+          with tarfile.open(sd) as t:
+              t.extractall("sdist")
           os.remove(sd)
           root = next(d for d in glob.glob("sdist/*/") if os.path.isfile(d + "CMakeLists.txt"))
           cm = root + "CMakeLists.txt"
           txt = open(cm).read()
+
           if os.environ["PKG"] == "cricodecs":
               # NDK 27 libc++ (LLVM 18) lacks <flat_map>/<flat_set>; shadow them with std::map/set.
               open(root + "CriCodecs/include/flat_map", "w").write(
                   "#pragma once\n#include <map>\nnamespace std { template <class K, class V, class C = less<K>> using flat_map = map<K, V, C>; }\n")
               open(root + "CriCodecs/include/flat_set", "w").write(
                   "#pragma once\n#include <set>\nnamespace std { template <class K, class C = less<K>> using flat_set = set<K, C>; }\n")
-              # std::stop_token / jthread are 'experimental' in libc++ 18 (header-only).
-              i = txt.index("project("); j = txt.index("\n", i) + 1
+
+              # std::stop_token / jthread are experimental in libc++ 18.
+              i = txt.index("project(")
+              j = txt.index("\n", i) + 1
               txt = txt[:j] + "add_compile_definitions(_LIBCPP_ENABLE_EXPERIMENTAL)\n" + txt[j:]
-              # clang 18 mishandles `if consteval` inside templates. Use is_constant_evaluated instead.
+
+              # Replace if consteval for clang 18 compatibility.
               n = root + "CriCodecs/src/utilities/numeric.hpp"
               t = open(n).read().replace("if consteval {", "if (std::is_constant_evaluated()) {")
               open(n, "w").write(re.sub(r"\bconsteval\b", "constexpr", t))
-              # nanobind modules don't link libpython; Android needs it (--no-undefined).
+
+              # Android needs libpython linked.
               with open(root + "PyCriCodecs/CMakeLists.txt", "a") as f:
                   f.write("\nif(ANDROID)\n  target_link_options(cricodecs PRIVATE -lpython${Python_VERSION_MAJOR}.${Python_VERSION_MINOR})\nendif()\n")
           else:
-              # pybind11 + Development.Module doesn't link libpython; Android needs it.
               txt += "\nif(ANDROID)\n  target_link_options(_rg_converters PRIVATE -lpython${Python_VERSION_MAJOR}.${Python_VERSION_MINOR})\nendif()\n"
+
           open(cm, "w").write(txt)
           name = os.path.basename(root.rstrip("/"))
-          with tarfile.open(f"sdist/{name}.tar.gz", "w:gz") as t: t.add(root, arcname=name)
+
+          with tarfile.open(f"sdist/{name}.tar.gz", "w:gz") as t:
+              t.add(root, arcname=name)
+
           shutil.rmtree(root)
           print(os.listdir("sdist"))
           PY
@@ -142,6 +162,7 @@ jobs:
       id-token: write
       contents: write
       attestations: write
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
@@ -181,16 +202,148 @@ jobs:
       - name: Pin Chaquopy Python to 3.13
         run: |
           sed -i -E '/^chaquopy \{/,/^\}/ s/version = "3\.[0-9]+"/version = "3.13"/' app/build.gradle.kts
+
           echo "--- chaquopy block ---"
           sed -n '/^chaquopy {/,/^}/p' app/build.gradle.kts
+
           grep -q 'version = "3.13"' app/build.gradle.kts \
             || { echo "::error::no 'version = \"3.13\"' in chaquopy block of app/build.gradle.kts"; exit 1; }
 
+      - name: Set bundled Chaquopy version from the plugin
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          CHAQUOPY_PLUGIN=$(grep -oE 'com\.chaquo\.python"\) version "[0-9.]+"' build.gradle.kts \
+            | grep -oE '[0-9]+\.[0-9]+\.[0-9]+')
+
+          if [[ -z "$CHAQUOPY_PLUGIN" ]]; then
+            echo "::error::Could not read Chaquopy plugin version from root build.gradle.kts"
+            exit 1
+          fi
+
+          echo "Chaquopy plugin: $CHAQUOPY_PLUGIN"
+
+          python - "$CHAQUOPY_PLUGIN" <<'PY'
+          import re
+          import sys
+          from pathlib import Path
+
+          version = sys.argv[1]
+          path = Path("app/build.gradle.kts")
+          content = path.read_text()
+
+          declaration = (
+              f'buildConfigField("String", "CHAQUOPY_VERSION", "\\"{version}\\"")'
+          )
+
+          # Find an existing declaration, allowing whitespace variations.
+          pattern = re.compile(
+              r'^[ \t]*buildConfigField\(\s*"String"\s*,\s*'
+              r'"CHAQUOPY_VERSION"\s*,.*?\)[ \t]*$',
+              re.MULTILINE
+          )
+
+          matches = list(pattern.finditer(content))
+
+          if len(matches) > 1:
+              raise SystemExit(
+                  f"Found {len(matches)} CHAQUOPY_VERSION declarations; expected at most one"
+              )
+
+          if matches:
+              content = pattern.sub("        " + declaration, content, count=1)
+              print("Updated existing CHAQUOPY_VERSION declaration")
+          else:
+              # Insert inside defaultConfig.
+              default_config = re.search(
+                  r'defaultConfig\s*\{',
+                  content
+              )
+
+              if not default_config:
+                  raise SystemExit("Could not find defaultConfig block in app/build.gradle.kts")
+
+              insert_at = default_config.end()
+
+              content = (
+                  content[:insert_at]
+                  + "\n        " + declaration
+                  + content[insert_at:]
+              )
+
+              print("Inserted CHAQUOPY_VERSION declaration into defaultConfig")
+
+          path.write_text(content)
+
+          print("Injected:", declaration)
+          PY
+
+          echo "--- verification ---"
+          grep -n 'CHAQUOPY_VERSION' app/build.gradle.kts
+
+          python - "$CHAQUOPY_PLUGIN" <<'PY'
+          import re
+          import sys
+          from pathlib import Path
+
+          version = sys.argv[1]
+          content = Path("app/build.gradle.kts").read_text()
+
+          expected = (
+              f'buildConfigField("String", "CHAQUOPY_VERSION", "\\"{version}\\"")'
+          )
+
+          if content.count(expected) != 1:
+              raise SystemExit("CHAQUOPY_VERSION verification failed")
+
+          if not re.search(
+              r'defaultConfig\s*\{[^}]*'
+              + re.escape(expected),
+              content,
+              re.DOTALL
+          ):
+              raise SystemExit("CHAQUOPY_VERSION is not inside defaultConfig")
+
+          print(f"Verified CHAQUOPY_VERSION = {version}")
+          PY
+
       - name: Restrict architecture to arm64-v8a
-        run: sed -i 's/listOf("arm64-v8a", "x86_64")/listOf("arm64-v8a")/' app/build.gradle.kts
+        run: |
+          sed -i 's/listOf("arm64-v8a", "x86_64")/listOf("arm64-v8a")/' app/build.gradle.kts
+
+      - name: Set app version from workflow input
+        run: |
+          RAW_VERSION="${{ github.event.inputs.version }}"
+
+          # Strip leading v/V and trailing prerelease suffix.
+          VERSION_NAME=$(echo "$RAW_VERSION" | sed -E 's/^[vV]//; s/-[A-Za-z]+[0-9]*$//')
+
+          if [ -z "$VERSION_NAME" ]; then
+            echo "::error::computed versionName is empty (input was '$RAW_VERSION')"
+            exit 1
+          fi
+
+          echo "Resolved versionName: $VERSION_NAME (from input: $RAW_VERSION)"
+
+          sed -i -E "s/versionName = \"[^\"]*\"/versionName = \"${VERSION_NAME}\"/" app/build.gradle.kts
+
+          if [ "${{ github.event.inputs.bump_version_code }}" = "true" ]; then
+            echo "Bumping versionCode to run number ${{ github.run_number }}"
+            sed -i -E "s/versionCode = [0-9]+/versionCode = ${{ github.run_number }}/" app/build.gradle.kts
+          else
+            echo "Leaving versionCode unchanged (bump_version_code=false)"
+          fi
+
+          echo "--- defaultConfig block ---"
+          sed -n '/defaultConfig {/,/}/p' app/build.gradle.kts
+
+          grep -q "versionName = \"${VERSION_NAME}\"" app/build.gradle.kts \
+            || { echo "::error::failed to set versionName in app/build.gradle.kts"; exit 1; }
 
       - name: Accept Android SDK licenses
-        run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null || true
+        run: |
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null || true
 
       - name: Install Android SDK platform 37
         run: |
@@ -199,7 +352,8 @@ jobs:
       - name: Decode release keystore
         env:
           KEYSTORE_BASE64: ${{ secrets.KEYSTORE }}
-        run: echo "$KEYSTORE_BASE64" | base64 -d > "${{ github.workspace }}/release.keystore"
+        run: |
+          echo "$KEYSTORE_BASE64" | base64 -d > "${{ github.workspace }}/release.keystore"
 
       - name: Build signed release APK
         env:
@@ -217,10 +371,12 @@ jobs:
         id: apk
         run: |
           APK_PATH=$(find app/build/outputs/apk/release -name "*.apk" | head -n1)
+
           if [ -z "$APK_PATH" ]; then
             echo "::error::no release APK found under app/build/outputs/apk/release"
             exit 1
           fi
+
           echo "path=$APK_PATH" >> "$GITHUB_OUTPUT"
 
       - name: Prepare APK for Release

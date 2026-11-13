@@ -4,5 +4,8 @@
         <item name="android:windowNoTitle">true</item>
         <item name="android:statusBarColor">@android:color/transparent</item>
         <item name="android:navigationBarColor">@android:color/transparent</item>
+        <!-- Cold-start window (Android 10/11 splash, and the frame before the first draw): same colour
+             as the in-app splash so the hand-off is invisible. -->
+        <item name="android:windowBackground">@color/ic_launcher_background</item>
     </style>
 </resources>

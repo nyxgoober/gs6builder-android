@@ -11,9 +11,15 @@ import android.os.Environment
 import android.provider.DocumentsContract
 import android.provider.MediaStore
 import android.provider.OpenableColumns
+import android.provider.Settings
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.Modifier
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.Box
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.setValue
 import com.chaquo.python.Python
@@ -161,8 +167,39 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         if (!Python.isStarted()) Python.start(AndroidPlatform(this))
+        // Debug aid: the default handler can't be read from another shell on this device, so also
+        // dump every crash into public Downloads to make the stack trace reachable.
+        val prevHandler = Thread.getDefaultUncaughtExceptionHandler()
+        Thread.setDefaultUncaughtExceptionHandler { thread, e ->
+            runCatching {
+                val values = ContentValues().apply {
+                    put(MediaStore.MediaColumns.DISPLAY_NAME, "gs6-crash.txt")
+                    put(MediaStore.MediaColumns.MIME_TYPE, "text/plain")
+                    put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS)
+                }
+                val uri = contentResolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values)
+                if (uri != null) contentResolver.openOutputStream(uri)?.use { o ->
+                    o.bufferedWriter().use { w ->
+                        w.appendLine(Thread.currentThread().name)
+                        val sw = java.io.StringWriter()
+                        e.printStackTrace(java.io.PrintWriter(sw))
+                        w.write(sw.toString())
+                    }
+                }
+            }
+            prevHandler?.uncaughtException(thread, e)
+        }
         val backend = Backend(this)
         val settings = AppSettings(this)
-        setContent { Root(this@MainActivity, backend, settings) }
+        // Skipped when the system animation scale is 0 ("remove animations").
+        val animationsOn = Settings.Global.getFloat(contentResolver, Settings.Global.ANIMATOR_DURATION_SCALE, 1f) > 0f
+        setContent {
+            // Saveable, so rotating or recreating the activity doesn't replay it.
+            var splash by rememberSaveable { mutableStateOf(animationsOn) }
+            Box(Modifier.fillMaxSize()) {
+                Root(this@MainActivity, backend, settings)
+                if (splash) HammerSplash { splash = false }
+            }
+        }
     }
 }

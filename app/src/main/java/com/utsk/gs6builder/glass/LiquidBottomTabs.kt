@@ -3,6 +3,7 @@ package com.utsk.gs6builder.glass
 
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.EaseOut
+import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -130,12 +131,15 @@ fun LiquidBottomTabs(
         }
         // One stable collector: animates to every change of selectedTabIndex.
         // collect (not collectLatest) so a running animation is never cancelled mid-flight.
+        // Taps use the pager's gentle spring so the selector slides over to the tapped tab instead of
+        // snapping; drag drops keep the stiff spring for a crisp settle.
+        val tapAnimationSpec = remember { spring<Float>(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMediumLow) }
         LaunchedEffect(dampedDragAnimation) {
             snapshotFlow { selectedTabIndex() }
                 .drop(1)
                 .collect { index ->
                     currentIndex = index
-                    dampedDragAnimation.animateToValue(index.toFloat())
+                    dampedDragAnimation.animateToValue(index.toFloat(), tapAnimationSpec)
                     onTabSelected(index)
                 }
         }

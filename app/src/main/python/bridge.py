@@ -36,3 +36,17 @@ def import_zip(zip_path, extract_dir):
 
 def import_level(site, url, root, log):
     return json.dumps(api.import_level(site, url, root, log=lambda m: log.accept(str(m))))
+
+
+def versions():
+    """Bundled runtime + component versions, JSON-encoded."""
+    import sys
+    import importlib.metadata as md
+    comps = {}
+    for name in ("UnityPy", "rg-converters", "cricodecs", "Pillow", "texture2ddecoder",
+                 "etcpak", "astc-encoder-py", "lz4", "brotli"):
+        try:
+            comps[name] = md.version(name)
+        except Exception:
+            comps[name] = "not installed"
+    return json.dumps({"python": sys.version.split()[0], "components": comps})

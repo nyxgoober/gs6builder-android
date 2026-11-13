@@ -2,6 +2,7 @@
 package com.utsk.gs6builder.glass
 
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.AnimationSpec
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.MutatorMutex
 import androidx.compose.runtime.snapshotFlow
@@ -114,12 +115,12 @@ class DampedDragAnimation(
         }
     }
 
-    fun animateToValue(value: Float) {
+    fun animateToValue(value: Float, spec: AnimationSpec<Float> = valueAnimationSpec) {
         animationScope.launch {
             mutatorMutex.mutate {
                 press()
                 val targetValue = value.coerceIn(valueRange)
-                launch { valueAnimation.animateTo(targetValue, valueAnimationSpec) }
+                launch { valueAnimation.animateTo(targetValue, spec) }
                 if (velocity != 0f) {
                     launch { velocityAnimation.animateTo(0f, velocityAnimationSpec) }
                 }
