@@ -268,8 +268,8 @@ def collect(p: dict) -> dict:
                 if not ok:
                     errs.append(f"Alt vocal {idx}: jacket {msg}")
         alt_entries.append({"id": idx, "name": nm, "vocals": vo,
-                            "vocal_type": v["vocal_type"], "has_jacket": bool(jk)})
-        if au:
+                            "vocal_type": v.get("vocal_type", DEFAULT_VOCAL_TYPE), "has_jacket": bool(jk)})
+        if au and os.path.isfile(au):
             cover_files.append((au, f"covers/cover_{idx}" + _ext(au)))
         if pv:
             cover_files.append((pv, f"covers/cover_pre_{idx}" + _ext(pv)))
