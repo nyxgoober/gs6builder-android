@@ -53,6 +53,7 @@ import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
@@ -192,13 +193,14 @@ internal fun PButton(
         pressed -> Color.White
         else -> p.ink
     }
-    val border = if (!primary && !pressed) BorderStroke(2.dp, p.line) else null
-    androidx.compose.material3.Surface(
-        onClick = { haptic(); onClick() }, enabled = enabled, shape = ProjectSekaiPill, color = bg,
-        contentColor = fg, border = border,
-        modifier = modifier,
-        interactionSource = source,
-    ) {
+    val border: BorderStroke? = null
+        androidx.compose.material3.Surface(
+            onClick = { haptic(); onClick() }, enabled = enabled, shape = ProjectSekaiPill, color = bg,
+            contentColor = fg, border = border,
+            modifier = modifier.shadow(4.dp, shape = ProjectSekaiPill),
+            interactionSource = source,
+        ) {
+
         Row(
             Modifier.padding(horizontal = 18.dp, vertical = 13.dp), horizontalArrangement = Arrangement.Center,
             verticalAlignment = Alignment.CenterVertically, content = content,
@@ -229,7 +231,7 @@ internal fun PChoiceCard(
             .fillMaxWidth()
             .clip(ProjectSekaiCardShape)
             .background(bg)
-            .border(2.dp, borderColor, ProjectSekaiCardShape)
+            .shadow(4.dp, shape = ProjectSekaiCardShape)
             .clickable(interactionSource = source, indication = null) { haptic(); onClick() }
             .padding(14.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -295,7 +297,7 @@ internal fun PRow(
             .fillMaxWidth()
             .clip(ProjectSekaiCardShape)
             .background(bg)
-            .border(2.dp, border, ProjectSekaiCardShape)
+            .shadow(4.dp, shape = ProjectSekaiCardShape)
             .then(if (onClick != null) Modifier.clickable(interactionSource = source, indication = null) { haptic(); onClick() } else Modifier)
             .padding(horizontal = 14.dp, vertical = 13.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -323,8 +325,8 @@ internal fun PTitledBlock(
 ) {
     val p = LocalProjectSekai.current
     Column(
-        modifier.fillMaxWidth().clip(ProjectSekaiCardShape).background(p.surface)
-            .border(2.dp, p.line, ProjectSekaiCardShape).padding(14.dp),
+modifier.fillMaxWidth().clip(ProjectSekaiCardShape).background(p.surface)
+                .shadow(4.dp, shape = ProjectSekaiCardShape).padding(14.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -504,7 +506,7 @@ internal fun PTextField(
             decorationBox = { innerTextField ->
                 Box(
                     Modifier.fillMaxWidth().clip(ProjectSekaiCardShape).background(p.surface)
-                        .border(2.dp, p.line, ProjectSekaiCardShape).padding(horizontal = 14.dp, vertical = 12.dp),
+                        .shadow(4.dp, shape = ProjectSekaiCardShape).padding(horizontal = 14.dp, vertical = 12.dp),
                     contentAlignment = Alignment.CenterStart,
                 ) {
                     if (value.isEmpty()) {
@@ -581,7 +583,8 @@ internal fun ProjectSekaiSheet(
     val haptic = LocalMHaptics.current
     Box(
         // The sheet slides up from the bottom of the screen, so only the top corners are rounded.
-        Modifier.fillMaxWidth().clip(RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp)).background(p.sheet),
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp)).background(p.sheet)
+            .shadow(12.dp, shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp))
     ) {
         Column {
             Row(
@@ -655,10 +658,10 @@ internal fun PDialog(
                         scaleY = 0.88f + 0.12f * v
                         alpha = (v * 4f).coerceAtMost(1f)
                     }
-                    .clip(ProjectSekaiCardShape)
-                    .background(p.surface)
-                    .border(2.dp, p.line, ProjectSekaiCardShape)
-                    .padding(20.dp),
+            .clip(ProjectSekaiCardShape)
+            .background(p.surface)
+            .shadow(2.dp, shape = ProjectSekaiCardShape)
+            .padding(20.dp),
                 verticalArrangement = Arrangement.spacedBy(14.dp),
             ) {
                 if (title != null) {
@@ -757,7 +760,8 @@ internal fun PTabBar(
     val haptic = LocalMHaptics.current
     Row(
         modifier.fillMaxWidth().clip(RoundedCornerShape(22.dp)).background(p.surface)
-            .border(2.dp, p.line, RoundedCornerShape(22.dp)).padding(6.dp),
+            .shadow(4.dp, shape = RoundedCornerShape(22.dp))
+            .padding(6.dp),
         horizontalArrangement = Arrangement.spacedBy(4.dp),
     ) {
         tabs.forEachIndexed { i, (icon, label) ->
