@@ -88,7 +88,10 @@ import java.util.function.Consumer
 @Composable
 fun Root(activity: ComponentActivity, b: Backend, s: AppSettings) {
     val systemDark = isSystemInDarkTheme()
-    val dark = when (s.themeMode) { 1 -> false; 2 -> true; else -> systemDark }
+    val materialDark = when (s.themeMode) { 1 -> false; 2 -> true; else -> systemDark }
+    // Project SEKAI is a light-first design: it has its own light/dark choice and does not follow
+    // the Material theme, so switching designs never drops you into the wrong theme.
+    val dark = if (s.uiMode == 1) s.sekaiTheme == 1 else materialDark
     val monet = s.monet && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
 
     DisposableEffect(dark) {
@@ -109,7 +112,10 @@ fun Root(activity: ComponentActivity, b: Backend, s: AppSettings) {
         }
     }
     val c = rememberAppController(b, s)
-    MaterialAppTheme(s, dark, appFont) { MaterialShell(c, dark) }
+    MaterialAppTheme(s, dark, appFont) {
+        // 0 = Material, 1 = Project SEKAI.
+        if (s.uiMode == 1) ProjectSekaiShell(c, dark) else MaterialShell(c, dark)
+    }
 }
 
     /** Re-run the combo check for an imported row without UI prompts (imports are always lenient). */

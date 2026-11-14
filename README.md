@@ -53,9 +53,11 @@ well formed) and any problems are shown in a list. Chart filenames that are clea
 
 ## Settings
 
-- **Appearance**: theme (system/light/dark), dynamic color from the wallpaper, theme color seed swatches,
-  AMOLED dark, font (Intern / Inter / system), liquid glass tab bar (Android 13+, plain bar otherwise),
-  haptics.
+- **Appearance**: UI design — **Material UI** or **Project SEKAI UI**. Project SEKAI is a light-first design
+  and carries its own Light/Dark choice, so it does not follow the Material theme. Material UI keeps the
+  theme (system/light/dark), dynamic color from the wallpaper, theme color seed swatches, AMOLED dark and
+  the liquid glass tab bar (Android 13+, plain bar otherwise). Both designs share the font
+  (Intern / Inter / system) and the haptics setting.
 - **Project**: copy identifier after compiling, output folder (SAF), new project.
 - **Updates**: check on launch, Release (stable only) or Preview (also alpha/beta/pre/rc) channel, and a
   manual check against the newest GitHub release. Release downloads open in the browser; pre-releases ask
@@ -68,8 +70,16 @@ well formed) and any problems are shown in a list. Chart filenames that are clea
 
 The upstream Python modules (`charts.py`, `encode.py`, `untitledcharts.py`, `ccarchive.py`, `deps.py`) run
 unmodified inside the app through [Chaquopy](https://chaquo.com/chaquopy/). The desktop builder's Tkinter
-window is replaced by a Material 3 Jetpack Compose UI (`MaterialShell.kt`, `MaterialPages.kt`,
-`MaterialKit.kt`); [Miuix](https://github.com/compose-miuix-ui/miuix) is used for its icon set only.
+window is replaced by a Jetpack Compose UI with two designs:
+
+- **Material** (default): Material 3 with a large collapsing top app bar, dynamic color and a liquid glass
+  tab bar (`MaterialShell.kt`, `MaterialPages.kt`, `MaterialKit.kt`).
+- **Project SEKAI**: this app's own teal/mint/sky card design — pill buttons, flat selectable cards, a teal
+  header bar and card-based sheets and dialogs (`ProjectSekaiShell.kt`, `ProjectSekaiPages.kt`,
+  `ProjectSekaiKit.kt`). Light by default, with its own Light/Dark switch in Settings.
+
+Both designs read the same project state, so switching the design in Settings keeps your work.
+[Miuix](https://github.com/compose-miuix-ui/miuix) is used for its icon set only.
 
 ## Building
 
@@ -90,7 +100,7 @@ Internet access is only used for UntitledCharts / CC Archive imports and update/
 
 | Path | Contents |
 |---|---|
-| `app/src/main/java/com/utsk/gs6builder/` | Compose UI: `MaterialShell.kt` (pages, tabs, dialogs), `MaterialPages.kt` / `MaterialKit.kt` (settings rows, widgets), `AppInfo.kt` (about page + fetchers), `Splash.kt` (launch animation) |
+| `app/src/main/java/com/utsk/gs6builder/` | Compose UI: `MaterialShell.kt` (pages, tabs, dialogs), `MaterialPages.kt` / `MaterialKit.kt` (settings rows, widgets), `ProjectSekaiShell.kt` / `ProjectSekaiPages.kt` / `ProjectSekaiKit.kt` (the Project SEKAI design), `AppInfo.kt` (about page + fetchers), `Splash.kt` (launch animation) |
 | `app/src/main/python/gs6_api.py`, `bridge.py` | Headless API and the Kotlin bridge |
 | `app/requirements-android.txt` | Python packages installed by Chaquopy (native ones come from `./wheels`) |
 | `.github/workflows/build-app.yml` | Wheel builds, APK, release + build attestation |

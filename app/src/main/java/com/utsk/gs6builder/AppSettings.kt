@@ -43,6 +43,10 @@ class AppSettings(context: Context) {
     /** 0 = Intern (default), 1 = Inter, 2 = System. */
     var fontChoice by IntSetting(sp, "font_choice", 0)
     var glassBar by BoolSetting(sp, "glass_bar", true)
+    /** 0 = Material (default), 1 = Project SEKAI. */
+    var uiMode by IntSetting(sp, "ui_mode", 0)
+    /** Project SEKAI only: 0 = Light (default), 1 = Dark. The Material theme does not carry over. */
+    var sekaiTheme by IntSetting(sp, "sekai_theme", 0)
 
     /** Pure black surfaces in dark theme. */
     var amoled by BoolSetting(sp, "amoled", false)

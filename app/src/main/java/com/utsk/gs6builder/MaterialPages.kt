@@ -227,6 +227,9 @@ internal fun MSettingsPage(
     val glassSupported = isRuntimeShaderSupported()
     MSection("Appearance") {
         row {
+            MDropdownRow("UI design", listOf("Material UI", "Project SEKAI UI"), s.uiMode, icon = MIcons.Palette) { s.uiMode = it }
+        }
+        row {
             MPad {
                 Row(horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.CenterVertically) {
                     Icon(MiuixIcons.Theme, contentDescription = null,
